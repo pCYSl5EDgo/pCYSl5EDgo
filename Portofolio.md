@@ -1,5 +1,7 @@
 [スーギ・ノウコ自治区](https://twitter.com/pcysl5edgo)の活動履歴です。
 
+OSS Contributionよりも前のOSS活動は私が主体となって個人的に作成したものです。
+
 # Mono.Cecil利用OSS
 
 ## Unity DOTS用ゼロマネージドヒープアロケーションLINQライブラリ UniNativeLinq 2019年度
@@ -12,14 +14,14 @@
 
 ## Unity用最速Enum.ToStringライブラリ UniEnumExtension 2019年度
 
-https://github.com/pCYSl5EDgo/UniEnumExtension
+[https://github.com/pCYSl5EDgo/UniEnumExtension](https://github.com/pCYSl5EDgo/UniEnumExtension)
 
 Mono.Cecilを利用してenumのToString()を高速な関数呼び出しに置換します。<br/>
 場合によっては定数文字列に置換しますので実行時間をゼロにしたりできます。
 
 ## C++のconstexprをC#でも使いたいので作ったライブラリ dotnet-constexpr 2019年度
 
-https://booth.pm/ja/items/1609135<br/>
+[https://booth.pm/ja/items/1609135](https://booth.pm/ja/items/1609135)<br/>
 [解説記事](https://qiita.com/pCYSl5EDgo/items/5846ce9255bf81b37807)
 
 使い所が限られますけれどもコンパイル時計算という美しい概念に魅了されて作りました。<br/>
@@ -29,7 +31,7 @@ Mono.CecilによるIL weavingの華と言えるでしょう。
 
 ## setup-unity 2019年度
 
-https://github.com/pCYSl5EDgo/setup-unity
+[https://github.com/pCYSl5EDgo/setup-unity](https://github.com/pCYSl5EDgo/setup-unity)
 
 [GabLeRoux](https://gableroux.com/)氏の提供するUnityがインストールされたDocker imageは非常に便利です。
 しかし、beta版やalpha版を利用できないのが常々残念でした。
@@ -38,17 +40,17 @@ https://github.com/pCYSl5EDgo/setup-unity
 
 ## create-unitypackage 2019年度
 
-https://github.com/pCYSl5EDgo/create-unitypackage
+[https://github.com/pCYSl5EDgo/create-unitypackage](https://github.com/pCYSl5EDgo/create-unitypackage)
 
 [setup-unity](https://github.com/pCYSl5EDgo/setup-unity)や[GabLeRoux氏のDocker image](https://hub.docker.com/r/gableroux/unity3d/)を利用してunitypackageを生成するのは4分以上必要です。<br/>
 unitypackage自体は特殊なフォルダ規則をしたtar.gzipファイルでしたので、shellスクリプトを頑張ることでUnityを使用せず作成できます。<br/>
 数秒でCIが終わるようになって大満足の高速化でした。
 
-https://github.com/pCYSl5EDgo/unitypackage は上記GitHub ActionからNode.js向けライブラリとして機能を独立させたものです。
+[https://github.com/pCYSl5EDgo/unitypackage](https://github.com/pCYSl5EDgo/unitypackage)は上記GitHub ActionからNode.js向けライブラリとして機能を独立させたものです。
 
 ## cat 2019年度
 
-https://github.com/pCYSl5EDgo/cat
+[https://github.com/pCYSl5EDgo/cat](https://github.com/pCYSl5EDgo/cat)
 
 GitHub Actionはworkflowの変数と、各job内の環境変数の間に断絶があります。<br/>
 この断絶を少しでも埋めるためにcatを実装しました。
@@ -57,21 +59,21 @@ GitHub Actionはworkflowの変数と、各job内の環境変数の間に断絶�
 
 ## UniUnsafeIO 2019年度
 
-https://github.com/pCYSl5EDgo/UniUnsafeIO
+[https://github.com/pCYSl5EDgo/UniUnsafeIO](https://github.com/pCYSl5EDgo/UniUnsafeIO)
 
 Unity native C++ pluginの練習として作成しました。<br/>
 Unity AsyncReadManagerの対になるように頑張って作っています。
 
 ## asmdef Scripting Defines 2020年度
 
-https://github.com/pCYSl5EDgo/asmdefScriptingDefines
+[https://github.com/pCYSl5EDgo/asmdefScriptingDefines](https://github.com/pCYSl5EDgo/asmdefScriptingDefines)
 
 UnityのScripting Define Symbolsは2020でようやく配列として扱えるようになりました。<br/>
 しかし、asmdef毎にScripting Define Symbolsを定義したくなりませんか？　私はなりました。なので作りました。
 
 ## EmbedResourceCSharp 2020年度
 
-https://github.com/pCYSl5EDgo/EmbedResourceCSharp
+[https://github.com/pCYSl5EDgo/EmbedResourceCSharp](https://github.com/pCYSl5EDgo/EmbedResourceCSharp)
 
 C# Source Generatorの練習として良い感じに埋め込みリソースを扱えるようにしました。
 
@@ -90,7 +92,7 @@ C# Source Generatorの練習として良い感じに埋め込みリソースを�
 
 ## Voiceer
 
-https://github.com/negipoyoc/Voiceer
+[https://github.com/negipoyoc/Voiceer](https://github.com/negipoyoc/Voiceer)
 
 [GitHub Actionによるunitypackageの作成の自動化をするPull Requestを作成し、mergeしてもらいました。](https://github.com/negipoyoc/Voiceer/pull/9)
 
@@ -103,7 +105,7 @@ GitHub ActionからUnity ECSまで様々なテーマについて記述してい�
 
 ## WASM仕様和訳
 
-https://github.com/pCYSl5EDgo/WASMSpec
+[https://github.com/pCYSl5EDgo/WASMSpec](https://github.com/pCYSl5EDgo/WASMSpec)
 
 WASMに興味があり、一部を邦訳しました。<br/>
 どんな仕様が現時点で不足していて、何があれば実用に耐えるのかを把握できました。
@@ -116,13 +118,13 @@ WASMに興味があり、一部を邦訳しました。<br/>
 
 ### typeof(T) == typeof(struct型の具体的な名前)最適化
 
-https://forum.unity.com/threads/il2cpp-proposal-replace-typeof-t-typeof-struct-type-il-sequence-with-constant-boolean-value.986313/#post-6406563
+[https://forum.unity.com/threads/il2cpp-proposal-replace-typeof-t-typeof-struct-type-il-sequence-with-constant-boolean-value.986313/#post-6406563](https://forum.unity.com/threads/il2cpp-proposal-replace-typeof-t-typeof-struct-type-il-sequence-with-constant-boolean-value.986313/#post-6406563)
 
 RyuJITで行われる最適化がIL2CPPで行われていませんでした。<br/>
 ビルドサイズ削減につながりますし、実行速度も向上しますし、RyuJITのその最適化を前提としたコードを十分活かせるようになります。
 
 ### ReadOnlySpan<byte>最適化
 
-https://forum.unity.com/threads/il2cpp-ldsflda-privateimplementationdetails-improvement-proposal.983847/
+[https://forum.unity.com/threads/il2cpp-ldsflda-privateimplementationdetails-improvement-proposal.983847/](https://forum.unity.com/threads/il2cpp-ldsflda-privateimplementationdetails-improvement-proposal.983847/)
 
 IL2CPPの詳細な挙動に踏み込んで大胆にシンプルにしてもらえるようお願いしました。
