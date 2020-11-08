@@ -183,7 +183,7 @@ public struct Size : Unity.Entities.IComponentData
 
 public struct AliveState : Unity.Entities.IComponentData
 {
-    public bool IsAlive;
+    public bool Value;
 }
 ```
 </details>
@@ -205,10 +205,16 @@ public struct EnemyBulletCollisionJob : Unity.Jobs.IJob
     {
         for (int enemyIndex = 0; enemyIndex < EnemyPositionArray.Length; enemyIndex++)
         {
+            AliveState enemyAliveState = EnemyAliveStateArray[enemyIndex];
+            if (!enemyAliveState.Value) continue;
+
             Position2D enemyPosition = EnemyPositionArray[enemyIndex];
             Size enemySize = EnemySizeArray[enemyIndex];
             for (int bulletIndex = 0; bulletIndex < BulletPositionArray.Length; bulletIndex++)
             {
+                AliveState bulletAliveState = BulletAliveStateArray[bulletIndex];
+                if (!bulletAliveState.Value) continue;
+
                 Position2D bulletPosition = BulletPositionArray[bulletIndex];
                 Size bulletSize = BulletSizeArray[bulletIndex];
 
@@ -216,19 +222,15 @@ public struct EnemyBulletCollisionJob : Unity.Jobs.IJob
                 float diffY = enemyPosition.Y - bulletPosition.Y;
                 float distanceSquared = diffX * diffX + diffY * diffY;
                 float collisionRadius = enemy.Size + bullet.Size;
-                bool isCollided = distanceSquared <= collisionRadius * collisionRadius;
-                if (isCollided)
-                {
-                    ProcessCollision(enemyIndex, bulletIndex);
-                }
-            }
-        }
-    }
+                bool isNotCollided = distanceSquared > collisionRadius * collisionRadius;
+                if (isNotCollided) continue;
 
-    private void ProcessCollision(int enemyIndex, int bulletIndex)
-    {
-        EnemyAliveStateArray[enemyIndex] = new AliveState { IsAlive = false };
-        BulletAliveStateArray[bulletIndex] = new AliveState { IsAlive = false };
+                BulletAliveStateArray[bulletIndex] = new AliveState() { Value = false };
+                enemyAliveState.Value = false;
+            }
+
+            EnemyAliveStateArray[enemyIndex] = enemyAliveState;
+        }
     }
 }
 ```
@@ -239,9 +241,17 @@ public struct EnemyBulletCollisionJob : Unity.Jobs.IJob
 `Unity.Collections.NativeArray<Position2D>`が示すようにx座標とy座標がペアになってメモリ上に一列にぎっちりと並んでいますね。
 このため弾丸と敵との距離を計算するのが楽になっています。
 
-とはいえ衝突時の処理をハードコーディングせねばならないので柔軟性は従来のオブジェクト指向に比べたら低下しています。
+衝突判定も結構甘めになっています。しかし、弾丸が複数の敵に同時に当たるということはあまり考えにくいので特に問題にはならないと思います。
 
 ## もっともっと速くしたい
+
+８つのデータをひとまとめにしましょう。
+
+現代で一般的なSIMDには128bit幅SIMDと256bit幅SIMDという種別が存在します。<br/>
+ARM系CPUでは128bit幅が主流です。x86/64系は32bitCPUなら128bit幅、64bitCPUなら256bit幅が標準的にサポートされています。
+
+私はx64系CPUでWindowsで動作するプログラムを主にターゲットにしていますので8つ組のモデルを作ることにします。
+ARMのみの場合４つ組を使う方が素直でしょうね。
 
 <details><summary>モデル.cs</summary>
 
@@ -307,6 +317,38 @@ public struct SizeEight
 ```
 </details>
 
+8つ組にするといいましたが、どうするのかというのも重要です。`Position2DEight`を御覧ください。
+
+```csharp
+public struct Position2DEight
+{
+    public Unity.Mathematics.float4x2 X;
+    public Unity.Mathematics.float4x2 Y;
+}
+```
+
+XとYがそれぞれ8つ組になっていますね？<br/>
+これが大事なのです。
+仮にXとYのペアを8つ組にしたら次のようなコードになるでしょう。
+
+```csharp
+public struct AnotherPosition2DEight
+{
+    public Unity.Mathematics.float4x4 XY;
+}
+```
+
+この`AnotherPosition2DEight`は効率的なSIMD演算を阻害します。特にXとY同士で計算しようとすると非常に非効率になります。
+X座標はX座標と、Y座標はY座標とお付き合いするべきだと思うの。
+
+x86/64系CPUでSIMDを使う際に注意してほしいことなのですけれども、**比較演算の結果のtrueは比較対象の型の幅の全bitが1になっています**。
+故に`enum AliveState`はDeadが-1でAliveが0とすることで、それぞれ`true`と`false`に対応させているのですね。
+
+比較演算でtrueなら全bit1となる仕様はx86/64系とARM系の両方で保証されています。RISC-Vとかはよくわかりませんが、Unity使用者なら気にせずともよいでしょう。
+
+以下は衝突判定の実装部分です。<br/>
+Unity.Burst.Intrinsicsを利用している記事では多分日本語では初かそうでなくても２番目なんじゃないですかね……？
+
 <details><summary>長いソースコード</summary>
 
 ```csharp
@@ -334,77 +376,62 @@ public struct EnemyBulletCollisionJob : Unity.Jobs.IJob
 
     private unsafe void ExecuteFma()
     {
-        Unity.Collections.NativeArray<UnityBurst.Intrinsics.v256> enemyPositionArray = EnemyPositionArray.Reinterpret<UnityBurst.Intrinsics.v256>(sizeof(UnityBurst.Intrinsics.v256));
-        Unity.Collections.NativeArray<UnityBurst.Intrinsics.v256> bulletPositionArray = BulletPositionArray.Reinterpret<UnityBurst.Intrinsics.v256>(sizeof(UnityBurst.Intrinsics.v256));
-        Unity.Collections.NativeArray<UnityBurst.Intrinsics.v256> enemyAliveStateArray = EnemyAliveStateArray.Reinterpret<UnityBurst.Intrinsics.v256>(sizeof(UnityBurst.Intrinsics.v256));
-        Unity.Collections.NativeArray<UnityBurst.Intrinsics.v256> bulletAliveStateArray = BulletAliveStateArray.Reinterpret<UnityBurst.Intrinsics.v256>(sizeof(UnityBurst.Intrinsics.v256));
-        Unity.Collections.NativeArray<UnityBurst.Intrinsics.v256> enemySizeArray = EnemySizeArray.Reinterpret<UnityBurst.Intrinsics.v256>(sizeof(UnityBurst.Intrinsics.v256));
-        Unity.Collections.NativeArray<UnityBurst.Intrinsics.v256> bulletSizeArray = BulletSizeArray.Reinterpret<UnityBurst.Intrinsics.v256>(sizeof(UnityBurst.Intrinsics.v256));
+        Unity.Collections.NativeArray<Unity.Burst.Intrinsics.v256> enemyPositionArray = EnemyPositionArray.Reinterpret<Unity.Burst.Intrinsics.v256>(sizeof(Unity.Burst.Intrinsics.v256));
+        Unity.Collections.NativeArray<Unity.Burst.Intrinsics.v256> bulletPositionArray = BulletPositionArray.Reinterpret<Unity.Burst.Intrinsics.v256>(sizeof(Unity.Burst.Intrinsics.v256));
+        Unity.Collections.NativeArray<Unity.Burst.Intrinsics.v256> enemyAliveStateArray = EnemyAliveStateArray.Reinterpret<Unity.Burst.Intrinsics.v256>(sizeof(Unity.Burst.Intrinsics.v256));
+        Unity.Collections.NativeArray<Unity.Burst.Intrinsics.v256> bulletAliveStateArray = BulletAliveStateArray.Reinterpret<Unity.Burst.Intrinsics.v256>(sizeof(Unity.Burst.Intrinsics.v256));
+        Unity.Collections.NativeArray<Unity.Burst.Intrinsics.v256> enemySizeArray = EnemySizeArray.Reinterpret<Unity.Burst.Intrinsics.v256>(sizeof(Unity.Burst.Intrinsics.v256));
+        Unity.Collections.NativeArray<Unity.Burst.Intrinsics.v256> bulletSizeArray = BulletSizeArray.Reinterpret<Unity.Burst.Intrinsics.v256>(sizeof(Unity.Burst.Intrinsics.v256));
         for (int enemyIndex = 0; enemyIndex < EnemyPositionArray.Length; enemyIndex++)
         {
-            UnityBurst.Intrinsics.v256 enemyAliveState = enemyAliveStateArray[enemyIndex];
-            UnityBurst.Intrinsics.v256 enemyPositionX = enemyPositionArray[(enemyIndex << 1)];
-            UnityBurst.Intrinsics.v256 enemyPositionY = enemyPositionArray[(enemyIndex << 1) + 1];
-            UnityBurst.Intrinsics.v256 enemySize = enemySizeArray[enemyIndex];
+            Unity.Burst.Intrinsics.v256 enemyAliveState = enemyAliveStateArray[enemyIndex];
+            Unity.Burst.Intrinsics.v256 enemyPositionX = enemyPositionArray[(enemyIndex << 1)];
+            Unity.Burst.Intrinsics.v256 enemyPositionY = enemyPositionArray[(enemyIndex << 1) + 1];
+            Unity.Burst.Intrinsics.v256 enemySize = enemySizeArray[enemyIndex];
 
             for (int bulletIndex = 0; bulletIndex < BulletPositionArray.Length; bulletIndex++)
             {
-                UnityBurst.Intrinsics.v256 bulletAliveState = bulletAliveStateArray[bulletIndex];
-                UnityBurst.Intrinsics.v256 bulletPositionX = bulletPositionArray[(bulletIndex << 1)];
-                UnityBurst.Intrinsics.v256 bulletPositionY = bulletPositionArray[(bulletIndex << 1) + 1];
-                UnityBurst.Intrinsics.v256 bulletSize = bulletSizeArray[bulletIndex];
+                Unity.Burst.Intrinsics.v256 bulletAliveState = bulletAliveStateArray[bulletIndex];
+                Unity.Burst.Intrinsics.v256 bulletPositionX = bulletPositionArray[(bulletIndex << 1)];
+                Unity.Burst.Intrinsics.v256 bulletPositionY = bulletPositionArray[(bulletIndex << 1) + 1];
+                Unity.Burst.Intrinsics.v256 bulletSize = bulletSizeArray[bulletIndex];
 
-                for (int swapIndex = 0; swapIndex < 2; ++swapIndex)
+                for (int swapIndex = 0; swapIndex < 2; ++swapIndex, Swap(ref bulletAliveState), Swap(ref bulletPositionX), Swap(ref bulletPositionY), Swap(ref bulletSize))
                 {
-                    for (int rotateIndex = 0; rotateIndex < 4; ++rotateIndex)
+                    for (int rotateIndex = 0; rotateIndex < 4; ++rotateIndex, Rotate(ref bulletAliveState), Rotate(ref bulletPositionX), Rotate(ref bulletPositionY), Rotate(ref bulletSize))
                     {
-                        UnityBurst.Intrinsics.v256 diffX = Unity.Burst.Intrinsics.Avx.mm256_sub_ps(enemyPositionX, bulletPositionX);
-                        UnityBurst.Intrinsics.v256 diffY = Unity.Burst.Intrinsics.Avx.mm256_sub_ps(enemyPositionY, bulletPositionY);
-                        UnityBurst.Intrinsics.v256 distanceSquared = Unity.Burst.Intrinsics.Avx.mm256_mul_ps(diffX, diffX);
-                        distanceSquared = Unity.Burst.Intrinsics.Fma.mm256_fmadd_ps(diffY, diffY, distanceSquared);
-                        UnityBurst.Intrinsics.v256 collisionRadius = Unity.Burst.Intrinsics.Avx.mm256_add_ps(enemySize, bulletSize);
-                        UnityBurst.Intrinsics.v256 collisionRadiusSquared = Unity.Burst.Intrinsics.Avx.mm256_mul_ps(collisionRadius, collisionRadius);
-                        UnityBurst.Intrinsics.v256 isCollided = Unity.Burst.Intrinsics.Avx.mm256_cmp_ps(distanceSquared, collisionRadiusSquared, (int)Unity.Burst.Intrinsics.Avx.CMP.LE_OQ);
-                        int isCollidedMask = Unity.Burst.Intrinsics.Avx.mm256_movemask_ps(isCollided);
-                        
-                        ProcessCollisionFma(isCollidedMask, enemyAliveState, bulletAliveState);
-
-                        if (swapIndex == 1 && rotateIndex == 3)
-                        {
-                            break;
-                        }
-
-                        Rotate(ref bulletAliveState);
-                        Rotate(ref bulletPositionX);
-                        Rotate(ref bulletPositionY);
-                        Rotate(ref bulletSize);
-                    }
-
-                    if (swapIndex == 0)
-                    {
-                        Swap(ref bulletAliveState);
-                        Swap(ref bulletPositionX);
-                        Swap(ref bulletPositionY);
-                        Swap(ref bulletSize);
+                        // float diffX = enemy.X - bullet.X;
+                        Unity.Burst.Intrinsics.v256 diffX = Unity.Burst.Intrinsics.Avx.mm256_sub_ps(enemyPositionX, bulletPositionX);
+                        // float diffY = enemy.Y - bullet.Y;
+                        Unity.Burst.Intrinsics.v256 diffY = Unity.Burst.Intrinsics.Avx.mm256_sub_ps(enemyPositionY, bulletPositionY);
+                        // float distanceSquared = diffY * diffY + (diffX * diffX);
+                        Unity.Burst.Intrinsics.v256 distanceSquared = Unity.Burst.Intrinsics.Fma.mm256_fmadd_ps(diffY, diffY, Unity.Burst.Intrinsics.Avx.mm256_mul_ps(diffX, diffX));
+                        Unity.Burst.Intrinsics.v256 collisionRadius = Unity.Burst.Intrinsics.Avx.mm256_add_ps(enemySize, bulletSize);
+                        Unity.Burst.Intrinsics.v256 collisionRadiusSquared = Unity.Burst.Intrinsics.Avx.mm256_mul_ps(collisionRadius, collisionRadius);
+                        Unity.Burst.Intrinsics.v256 isCollided = Unity.Burst.Intrinsics.Avx.mm256_cmp_ps(distanceSquared, collisionRadiusSquared, (int)Unity.Burst.Intrinsics.Avx.CMP.LE_OQ);
+                        // Deadが-1 == trueなのです
+                        Unity.Burst.Intrinsics.v256 anyDead = Unity.Burst.Intrinsics.Avx.mm256_or_ps(enemyAliveState, bulletAliveState);
+                        Unity.Burst.Intrinsics.v256 isValidCollision = Unity.Burst.Intrinsics.Avx.mm256_andnot_ps(anyDead, isCollided);
+                        enemyAliveState = Unity.Burst.Intrinsics.Avx.mm256_or_ps(isValidCollision, enemyAliveState);
+                        bulletAliveState = Unity.Burst.Intrinsics.Avx.mm256_or_ps(isValidCollision, bulletAliveState);
                     }
                 }
+
+                bulletAliveStateArray[bulletIndex] = bulletAliveState;
             }
+
+            enemyAliveStateArray[enemyIndex] = enemyAliveState;
         }
     }
 
-    private static void Swap(ref UnityBurst.Intrinsics.v256 value)
+    private static void Swap(ref Unity.Burst.Intrinsics.v256 value)
     {
         value = Unity.Burst.Intrinsics.Avx2.mm256_permute2x128_si256(value, value, 0b0000_0001);
     }
 
-    private static void Rotate(ref UnityBurst.Intrinsics.v256 value)
+    private static void Rotate(ref Unity.Burst.Intrinsics.v256 value)
     {
         value = Unity.Burst.Intrinsics.Avx2.mm256_permutevar8x32_ps(value, new v256(1, 2, 3, 0, 1, 2, 3, 0));
-    }
-
-    private void ProcessCollisionFma(int isCollided, UnityBurst.Intrinsics.v256 enemyAliveState, UnityBurst.Intrinsics.v256 bulletAliveState)
-    {
-        /* 省略 */
     }
 
     private void ExecuteOrdinal()
@@ -428,19 +455,39 @@ public struct EnemyBulletCollisionJob : Unity.Jobs.IJob
                     Unity.Mathematics.float4x2 distanceSquared = diffX * diffX + diffY * diffY;
                     Unity.Mathematics.float4x2 collisionRadius = enemy.Size + bullet.Size;
                     Unity.Mathematics.bool4x2 isCollided = distanceSquared <= collisionRadius * collisionRadius;
-                    if (Unity.Mathematics.math.any(isCollided))
-                    {
-                        ProcessCollision(isCollided, enemyAliveState, bulletAliveState);
-                    }
+                    Unity.Mathematics.bool4x2 isBulletAlive = bulletAliveState.Value == default(int4x2);
+                    Unity.Mathematics.bool4x2 isEnemyAlive = enemyAliveState.Value == default(int4x2);
+                    Unity.Mathematics.bool4x2 isValidCollision = isBulletAlive & isEnemyAlive & isCollided;
+                    bulletAliveState.Value.c0 = Unity.Mathematics.math.select(bulletAliveState.Value.c0, new int4(-1, -1, -1, -1), isValidCollision.c0);
+                    bulletAliveState.Value.c1 = Unity.Mathematics.math.select(bulletAliveState.Value.c1, new int4(-1, -1, -1, -1), isValidCollision.c1);
+                    enemyAliveState.Value.c0 = Unity.Mathematics.math.select(enemyAliveState.Value.c0, new int4(-1, -1, -1, -1), isValidCollision.c0);
+                    enemyAliveState.Value.c1 = Unity.Mathematics.math.select(enemyAliveState.Value.c1, new int4(-1, -1, -1, -1), isValidCollision.c1);
                 }
-            }
-        }
-    }
 
-    private void ProcessCollision(Unity.Mathematics.bool4x2 isCollided, AliveStateEight enemyAliveState, AliveStateEight bulletAliveState)
-    {
-        /* 省略 */
+                BulletAliveStateArray[bulletIndex] = bulletAliveState;
+            }
+
+            EnemyAliveStateArray[enemyIndex] = enemyAliveState;
+        }
     }
 }
 ```
 </details>
+
+Burst Intrinsicsを使う際にはCPUがどの程度対応しているのかを把握することが重要です。<br/>
+今回はAVX2のFma関数を利用しますので、`bool Unity.Burst.Intrinsics.Fma.IsFmaSupported`プロパティで場合分けをしました。
+
+Fmaが動かない環境向けのフォールバックコードをきちんと用意しておく必要がありますので、総コード量は単純に倍以上になりがちです。
+
+
+```csharp
+Unity.Burst.Intrinsics.v256 diffX = Unity.Burst.Intrinsics.Avx.mm256_sub_ps(enemyPositionX, bulletPositionX);
+Unity.Burst.Intrinsics.v256 diffY = Unity.Burst.Intrinsics.Avx.mm256_sub_ps(enemyPositionY, bulletPositionY);
+Unity.Burst.Intrinsics.v256 distanceSquared = Unity.Burst.Intrinsics.Fma.mm256_fmadd_ps(diffY, diffY, Unity.Burst.Intrinsics.Avx.mm256_mul_ps(diffX, diffX));
+```
+
+~~ここが`AnotherPosition2DEight`と`Position2DEight`の差別化ポイントでしょうね。<br/>~~
+考えたら`mm256_hadd_ps`とかあるので今回は差別化できなかったです……<br/>
+Position3Dとかnot power of 2な構造なら今回のようにAOSOAにすると上手くいくって言いたいのです。<br/>
+題材設定ミスってますね……　たすけて！もなふわすい～とる～む！！！
+
