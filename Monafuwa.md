@@ -67,7 +67,7 @@
 例えば敵(Enemy)が1万体出て来てそれをひたすら撃ち落とすというシューティングゲームがあるとします。<br/>
 普通のオブジェクト指向で敵と弾丸をモデリングして書いてみると多分次のような記述になるのではないでしょうか。
 
-<details><summary>モデル.cs</summary>
+<details><summary>モデル.cs</summary><div>
 
 ```csharp
 public interface IPosition2D
@@ -117,11 +117,12 @@ public interface ICollisionProcessor<T0, T1> : ICollisionProcessor
     void ProcessCollision(T0 item0, T1 item1);
 }
 ```
-</details>
+
+</div></details>
 
 そしてObjectiveEnemyとObjectiveBulletの衝突判定はおそらくこうなるでしょう。
 
-<details><summary>衝突判定.cs</summary>
+<details><summary>衝突判定.cs</summary><div>
 
 ```csharp
 // IEnumerable<ObjectiveEnemy> enemyCollection;
@@ -158,7 +159,8 @@ public sealed class CollisionKiller : ICollisionProcessor<ObjectiveEnemy, Object
     }
 }
 ```
-</details>
+
+</div></details>
 
 この設計で特に問題はないと考える人は多いはずです。<br/>
 **実際問題になることはまずありません。**
@@ -170,7 +172,7 @@ public sealed class CollisionKiller : ICollisionProcessor<ObjectiveEnemy, Object
 Unity ECS的にコードを書き直すと以下のような記述となります。<br/>
 型については名前空間を含めて完全な名前を書いていますのでわからないものについては検索してください。
 
-<details><summary>モデル.cs</summary>
+<details><summary>モデル.cs</summary><div>
 
 ```csharp
 public struct Position2D : Unity.Entities.IComponentData
@@ -189,9 +191,10 @@ public struct AliveState : Unity.Entities.IComponentData
     public bool Value;
 }
 ```
-</details>
 
-<details><summary>衝突判定用IJob.cs</summary>
+</div></details>
+
+<details><summary>衝突判定用IJob.cs</summary><div>
 
 ```csharp
 [Unity.Burst.BurstCompile]
@@ -237,7 +240,8 @@ public struct EnemyBulletCollisionJob : Unity.Jobs.IJob
     }
 }
 ```
-</details>
+
+</div></details>
 
 なぜこれが速くなるのでしょうか？<br/>
 [参照の空間的局所性](https://ja.wikipedia.org/wiki/%E5%8F%82%E7%85%A7%E3%81%AE%E5%B1%80%E6%89%80%E6%80%A7)がかなり高まっているからです。<br/>
@@ -257,7 +261,7 @@ ARM系CPUでは128bit幅が主流です。x86/64系は32bitCPUなら128bit幅、
 私はx64系CPUでWindowsで動作するプログラムを主にターゲットにしていますので8つ組のモデルを作ることにします。<br/>
 ARMのみの場合４つ組を使う方が素直でしょうね。
 
-<details><summary>モデル.cs</summary>
+<details><summary>モデル.cs</summary><div>
 
 ```csharp
 public struct AliveStateEight
@@ -319,7 +323,8 @@ public struct SizeEight
     }
 }
 ```
-</details>
+
+</div></details>
 
 8つ組にするといいましたが、どうするのかというのも重要です。`Position2DEight`を御覧ください。
 
@@ -353,7 +358,7 @@ x86/64系CPUでSIMDを使う際に注意してほしいことなのですけれ�
 以下は衝突判定の実装部分です。<br/>
 Unity.Burst.Intrinsicsを利用している記事では多分日本語では初かそうでなくても２番目なんじゃないですかね……？
 
-<details><summary>長いソースコード</summary>
+<details><summary>長いソースコード</summary><div>
 
 ```csharp
 [Unity.Burst.BurstCompile]
@@ -476,7 +481,8 @@ public struct EnemyBulletCollisionJob : Unity.Jobs.IJob
     }
 }
 ```
-</details>
+
+</div></details>
 
 Burst Intrinsicsを使う際にはCPUがどの程度対応しているのかを把握することが重要です。<br/>
 今回はAVX2のFma関数を利用しますので、`bool Unity.Burst.Intrinsics.Fma.IsFmaSupported`プロパティで場合分けをしました。
