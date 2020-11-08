@@ -1,16 +1,20 @@
-### Hi there 👋
+# Links
 
-<!--
-**pCYSl5EDgo/pCYSl5EDgo** is a ✨ _special_ ✨ repository because its `README.md` (this file) appears on your GitHub profile.
+- [Portfolio  written in Japanese](Portfolio.md)
+- [Articles hosted by Qiita written in Japanese](https://qiita.com/pCYSl5EDgo)
+- [Twitter account](https://twitter.com/pCYSl5EDgo)
 
-Here are some ideas to get you started:
+# Personality
 
-- 🔭 I’m currently working on ...
-- 🌱 I’m currently learning ...
-- 👯 I’m looking to collaborate on ...
-- 🤔 I’m looking for help with ...
-- 💬 Ask me about ...
-- 📫 How to reach me: ...
-- 😄 Pronouns: ...
-- ⚡ Fun fact: ...
--->
+- I am an university student
+- I live in Tokyo, Japan.
+- I love the programming static type languages such as C#, Rust and C/C++.
+- I am interested in the optimization.
+
+# Contact
+
+Please feel free to contact me.
+
+- pcysl5edgo@yahoo.co.jp
+- pcysl5edgo@gmail.com
+- [Twitter DM](https://twitter.com/pCYSl5EDgo)
