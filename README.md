@@ -1,12 +1,12 @@
 # Links
 
-- [Portfolio  written in Japanese](Portfolio.md)
+- [Portfolio  written in Japanese](https://pcysl5edgo.github.io/pCYSl5EDgo/Portofolio)
 - [Articles hosted by Qiita written in Japanese](https://qiita.com/pCYSl5EDgo)
 - [Twitter account](https://twitter.com/pCYSl5EDgo)
 
 # Personality
 
-- I am an university student
+- I am an university student.
 - I live in Tokyo, Japan.
 - I love the programming static type languages such as C#, Rust and C/C++.
 - I am interested in the optimization.
