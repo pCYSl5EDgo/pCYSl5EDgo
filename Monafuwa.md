@@ -3,7 +3,7 @@
 1999年12月8日は「ハリー・ポッターと賢者の石」が日本で発売された日です。故にこの記事も初投稿です。
 
 この記事は、[もなふわすい～とる～む Advent Calendar 2020](https://adventar.org/calendars/5183)の8日目です。<br/>
-昨日の記事は[サンマックスさん](https://twitter.com/Sunmax0731)の「[]()」でした！<br/>
+昨日の記事は[サンマックスさん](https://twitter.com/Sunmax0731)の「[もなふわすい～とる～む in the VRChat](https://qiita.com/Sunmax0731/private/cd90b674fe33b530c6bf)」でした！<br/>
 明日の記事はオークマネコさんの「」です。
 
 # はじめに
