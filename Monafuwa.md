@@ -160,7 +160,7 @@ public sealed class CollisionKiller : ICollisionProcessor<ObjectiveEnemy, Object
 この設計で特に問題はないと考える人は多いはずです。<br/>
 **実際問題になることはまずありません。**
 
-## Data Oriented Technology Stackで速くする
+## Data Oriented Technology Stack(DOTS)で速くする
 
 **しかし弾丸が数万、敵が数十万だったならば？**<br/>
 前述のコードでは遅すぎますね……。<br/>
@@ -491,3 +491,10 @@ Unity.Burst.Intrinsics.v256 distanceSquared = Unity.Burst.Intrinsics.Fma.mm256_f
 Position3Dとかnot power of 2な構造なら今回のようにAOSOAにすると上手くいくって言いたいのです。<br/>
 題材設定ミスってますね……　たすけて！もなふわすい～とる～む！！！
 
+# C# Source Generatorでコーディングをらくちんにしよう！
+
+`もっともっと速くしたい`のモデル部分の実装は非常に規則的に`DOTSで速くする`実装から生成可能です。
+大した手間ではないっちゃないのですが、モデル部分を考える際はプリミティブ型で考えたいですよね。
+そして、それに対応する８つ組の型を自動生成してほしいですよね？
+
+C#9をサポートしたRoslynバージョン3.8からはC# Source Generatorという
