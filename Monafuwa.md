@@ -62,8 +62,8 @@
 
 筆者は随時バージョンアップしています。
 
-- Unity 2020.2.0b12
-- Burst 1.3.4
+- Unity 2020.2.0b13
+- Burst 1.4.1
 - Visual Studio 2019 16.8.1
 - .NET 5.0.100
 
@@ -352,12 +352,19 @@ XとYがそれぞれ8つ組になっていますね？<br/>
 ```csharp
 public struct AnotherPosition2DEight
 {
-    public Unity.Mathematics.float4x4 XY;
+    public Unity.Mathematics.float2 XY0;
+    public Unity.Mathematics.float2 XY1;
+    public Unity.Mathematics.float2 XY2;
+    public Unity.Mathematics.float2 XY3;
+    public Unity.Mathematics.float2 XY4;
+    public Unity.Mathematics.float2 XY5;
+    public Unity.Mathematics.float2 XY6;
+    public Unity.Mathematics.float2 XY7;
 }
 ```
 
 この`AnotherPosition2DEight`は効率的なSIMD演算を阻害します。特にXとY同士で計算しようとすると非常に非効率になります。<br/>
-X座標はX座標と、Y座標はY座標とお付き合いするべきだと思うの。
+X座標はX座標と、Y座標はY座標とお付き合いするべきだと思いますわね。 ~~バ美肉エンジニアのねぎぽよしさんはizmさんとお付き合いするべき~~
 
 x86/64系CPUでSIMDを使う際に注意してほしいことなのですけれども、**比較演算の結果のtrueは比較対象の型の幅の全bitが1になっています**。<br/>
 故に`enum AliveState`はDeadが-1でAliveが0とすることで、それぞれ`true`と`false`に対応させているのですね。
@@ -518,7 +525,7 @@ Position3Dとかnot power of 2な構造なら今回のようにAOSOAにすると
 
 Roslynバージョン3.6からはC# Source Generatorというものを使えばコンパイル時にソースコードを自動生成できるのです！<br/>
 ついでにRoslyn 3.8はC#9も使えるのでぜひ使いましょう！<br/>
-問題はUnity2020.2はRoslyn 3.8を同梱していないということですが……。どうして3.5なの……？<br/>
+目下の所最大の問題はUnity2020.2はRoslyn 3.8を同梱していないということですが……。どうして3.5なの……？<br/>
 たすけて！もなふわすい～とる～む！！
 
 いやまあコンパイル時ソースコード自動生成は[従来からRoslynを利用してdotnet global toolで実現](https://github.com/neuecc/MessagePack-CSharp)とか出来ていましたが……。<br/>
@@ -564,34 +571,35 @@ public partial struct Position2D
 
 ```csharp
 [CollisionType(
-    new[] { typeof(Position2D), typeof(AliveState), typeof(Size) }, new[] { true, false, true },
-    new[] { typeof(Position2D), typeof(AliveState), typeof(Size) }, new[] { true, false, true }
+    new[] { typeof(Position2D), typeof(AliveState), typeof(Size) }, new[] { true, false, true }, "Enemy",
+    new[] { typeof(Position2D), typeof(AliveState), typeof(Size) }, new[] { true, false, true }, "Bullet"
 )]
 public static partial class CollisionHolder
 {
-    [CollisionMethod(IntrinsicsKind.Fma, 4)]
+    [MethodIntrinsicsKind(IntrinsicsKind.Fma)]
     private static void Exe2(
         ref v256 enemyX, ref v256 enemyY, ref v256 enemyAliveState, ref v256 enemySize,
         ref v256 bulletX, ref v256 bulletY, ref v256 bulletAliveState, ref v256 bulletSize
     )
     {
-        if (!X86.Fma.IsFmaSupported) return;
-
-        var diffX = X86.Avx.mm256_sub_ps(enemyX, bulletX);
-        var xSquare = X86.Avx.mm256_mul_ps(diffX, diffX);
-        var diffY = X86.Avx.mm256_sub_ps(enemyY, bulletY);
-        var lengthSquare = X86.Fma.mm256_fmadd_ps(diffY, diffY, xSquare);
-        
-        var radius = X86.Avx.mm256_add_ps(enemySize, bulletSize);
-        var radiusSquare = X86.Avx.mm256_mul_ps(radius, radius);
-        var cmp = X86.Avx.mm256_cmp_ps(lengthSquare, radiusSquare, (int)X86.Avx.CMP.LT_OQ);
-        
-        var hit = X86.Avx.mm256_andnot_ps(X86.Avx.mm256_or_ps(enemyAliveState, bulletAliveState), cmp);
-        enemyAliveState = X86.Avx.mm256_or_ps(enemyAliveState, hit);
-        bulletAliveState = X86.Avx.mm256_or_ps(bulletAliveState, hit);
+        if (X86.Fma.IsFmaSupported)
+        {
+            var diffX = X86.Avx.mm256_sub_ps(enemyX, bulletX);
+            var xSquare = X86.Avx.mm256_mul_ps(diffX, diffX);
+            var diffY = X86.Avx.mm256_sub_ps(enemyY, bulletY);
+            var lengthSquare = X86.Fma.mm256_fmadd_ps(diffY, diffY, xSquare);
+            
+            var radius = X86.Avx.mm256_add_ps(enemySize, bulletSize);
+            var radiusSquare = X86.Avx.mm256_mul_ps(radius, radius);
+            var cmp = X86.Avx.mm256_cmp_ps(lengthSquare, radiusSquare, (int)X86.Avx.CMP.LT_OQ);
+            
+            var hit = X86.Avx.mm256_andnot_ps(X86.Avx.mm256_or_ps(enemyAliveState, bulletAliveState), cmp);
+            enemyAliveState = X86.Avx.mm256_or_ps(enemyAliveState, hit);
+            bulletAliveState = X86.Avx.mm256_or_ps(bulletAliveState, hit);
+        }
     }
 
-    [CollisionMethod(IntrinsicsKind.Ordinal, 4)]
+    [MethodIntrinsicsKind(IntrinsicsKind.Ordinal)]
     private static void Exe(
         ref float4 enemyX, ref float4 enemyY, ref int4 enemyAliveState, ref float4 enemySize,
         ref float4 bulletX, ref float4 bulletY, ref int4 bulletAliveState, ref float4 bulletSize
@@ -605,63 +613,64 @@ public static partial class CollisionHolder
         bulletAliveState = math.select(bulletAliveState, -1, cmp);
     }
 
-    [CollisionCloseMethod(IntrinsicsKind.Ordinal, CollisionFieldKind.Outer, 1, nameof(AliveState.Value))]
-    private static int4 Close(int4 a0, int4 a1, int4 a2, int4 a3)
+    [CollisionCloseMethod(IntrinsicsKind.Ordinal, 1, nameof(AliveState.Value))]
+    private static int4 Close(int4 a0, int4 a1)
     {
-        return (a0 | a1) | (a2 | a3);
+        return (a0 | a1);
     }
 
-    [CollisionCloseMethod(IntrinsicsKind.Fma, CollisionFieldKind.Outer, 1, nameof(AliveState.Value))]
-    private static v256 Close2(v256 a0, v256 a1, v256 a2, v256 a3, v256 a4, v256 a5, v256 a6, v256 a7)
+    [CollisionCloseMethod(IntrinsicsKind.Fma, 1, nameof(AliveState.Value))]
+    private static v256 Close2(v256 a0, v256 a1)
     {
-        if (!X86.Fma.IsFmaSupported) return a0;
-
-        a0 = X86.Avx.mm256_or_ps(a0, a1);
-        a2 = X86.Avx.mm256_or_ps(a2, a3);
-        a4 = X86.Avx.mm256_or_ps(a4, a5);
-        a6 = X86.Avx.mm256_or_ps(a6, a7);
-        a0 = X86.Avx.mm256_or_ps(a0, a2);
-        a4 = X86.Avx.mm256_or_ps(a4, a6);
-        return X86.Avx.mm256_or_ps(a0, a4);
+        if (X86.Fma.IsFmaSupported)
+        {
+            return X86.Avx.mm256_or_ps(a0, a1);
+        }
+        else
+        {
+            throw new NotSupportedException();
+        }
     }
 }
 ```
 </div></details>
 
 記述がふわっとスッキリした感じがありませんか？<br/>
-ないですか……。
+定型的な記述を少なくし、本質的な部分にのみ注力できるようになっていますね？
 
 <details><summary>上のコードからこのような衝突判定用二重ループコードが自動生成されています。</summary><div>
-
-高効率なボイラープレートコードを自動で生成してくれるのは大変ありがたいものだと私は思います。
 
 ```csharp
 static partial class  CollisionHolder
 {
     [global::Unity.Burst.BurstCompile]
-    public unsafe struct CollisionJob : global::Unity.Jobs.IJob
+    public unsafe partial struct Job : global::Unity.Jobs.IJob
     {
-        [global::Unity.Collections.ReadOnly] public global::Unity.Collections.NativeArray<ComponentTypes.Position2D.Eight> Outer0;
-        public global::Unity.Collections.NativeArray<ComponentTypes.AliveState.Eight> Outer1;
-        [global::Unity.Collections.ReadOnly] public global::Unity.Collections.NativeArray<ComponentTypes.Size.Eight> Outer2;
-        [global::Unity.Collections.ReadOnly] public global::Unity.Collections.NativeArray<ComponentTypes.Position2D.Eight> Inner0;
-        public global::Unity.Collections.NativeArray<ComponentTypes.AliveState.Eight> Inner1;
-        [global::Unity.Collections.ReadOnly] public global::Unity.Collections.NativeArray<ComponentTypes.Size.Eight> Inner2;
+        [global::Unity.Collections.ReadOnly] public global::Unity.Collections.NativeArray<ComponentTypes.Position2D.Eight> EnemyPosition2D;
+        public global::Unity.Collections.NativeArray<ComponentTypes.AliveState.Eight> EnemyAliveState;
+        [global::Unity.Collections.ReadOnly] public global::Unity.Collections.NativeArray<ComponentTypes.Size.Eight> EnemySize;
+        [global::Unity.Collections.ReadOnly] public global::Unity.Collections.NativeArray<ComponentTypes.Position2D.Eight> BulletPosition2D;
+        public global::Unity.Collections.NativeArray<ComponentTypes.AliveState.Eight> BulletAliveState;
+        [global::Unity.Collections.ReadOnly] public global::Unity.Collections.NativeArray<ComponentTypes.Size.Eight> BulletSize;
 
         public void Execute()
         {
             if (global::Unity.Burst.Intrinsics.X86.Fma.IsFmaSupported)
             {
-                var outerPointer0 = (byte*)global::Unity.Collections.LowLevel.Unsafe.NativeArrayUnsafeUtility.GetUnsafeBufferPointerWithoutChecks(Outer0);
-                var outerPointer1 = (byte*)global::Unity.Collections.LowLevel.Unsafe.NativeArrayUnsafeUtility.GetUnsafeBufferPointerWithoutChecks(Outer1);
-                var outerPointer2 = (byte*)global::Unity.Collections.LowLevel.Unsafe.NativeArrayUnsafeUtility.GetUnsafeBufferPointerWithoutChecks(Outer2);
-                var innerOriginalPointer0 = (byte*)global::Unity.Collections.LowLevel.Unsafe.NativeArrayUnsafeUtility.GetUnsafeBufferPointerWithoutChecks(Inner0);
-                var innerOriginalPointer1 = (byte*)global::Unity.Collections.LowLevel.Unsafe.NativeArrayUnsafeUtility.GetUnsafeBufferPointerWithoutChecks(Inner1);
-                var innerOriginalPointer2 = (byte*)global::Unity.Collections.LowLevel.Unsafe.NativeArrayUnsafeUtility.GetUnsafeBufferPointerWithoutChecks(Inner2);
+                const int next1 = 0b00_11_10_01;
+                const int next2 = 0b01_00_11_10;
+                const int next3 = 0b10_01_00_11;
+
+                var outerPointer0 = (byte*)global::Unity.Collections.LowLevel.Unsafe.NativeArrayUnsafeUtility.GetUnsafeBufferPointerWithoutChecks(EnemyPosition2D);
+                var outerPointer1 = (byte*)global::Unity.Collections.LowLevel.Unsafe.NativeArrayUnsafeUtility.GetUnsafeBufferPointerWithoutChecks(EnemyAliveState);
+                var outerPointer2 = (byte*)global::Unity.Collections.LowLevel.Unsafe.NativeArrayUnsafeUtility.GetUnsafeBufferPointerWithoutChecks(EnemySize);
+                var innerOriginalPointer0 = (byte*)global::Unity.Collections.LowLevel.Unsafe.NativeArrayUnsafeUtility.GetUnsafeBufferPointerWithoutChecks(BulletPosition2D);
+                var innerOriginalPointer1 = (byte*)global::Unity.Collections.LowLevel.Unsafe.NativeArrayUnsafeUtility.GetUnsafeBufferPointerWithoutChecks(BulletAliveState);
+                var innerOriginalPointer2 = (byte*)global::Unity.Collections.LowLevel.Unsafe.NativeArrayUnsafeUtility.GetUnsafeBufferPointerWithoutChecks(BulletSize);
 
                 for (
                     var outerIndex = 0;
-                    outerIndex < Outer0.Length;
+                    outerIndex < EnemyPosition2D.Length;
                     ++outerIndex,
                     outerPointer0 += sizeof(ComponentTypes.Position2D.Eight),
                     outerPointer1 += sizeof(ComponentTypes.AliveState.Eight),
@@ -678,47 +687,43 @@ static partial class  CollisionHolder
                     var outer1_Value0 = global::Unity.Burst.Intrinsics.X86.Avx.mm256_load_ps(outer1_Value);
                     var outer2_Value0 = global::Unity.Burst.Intrinsics.X86.Avx.mm256_load_ps(outer2_Value);
 
-                    var outer0_X1 = global::Unity.Burst.Intrinsics.X86.Avx.mm256_permute_ps(outer0_X0, 0b00_11_10_01);
-                    var outer0_Y1 = global::Unity.Burst.Intrinsics.X86.Avx.mm256_permute_ps(outer0_Y0, 0b00_11_10_01);
-                    var outer1_Value1 = global::Unity.Burst.Intrinsics.X86.Avx.mm256_permute_ps(outer1_Value0, 0b00_11_10_01);
-                    var outer2_Value1 = global::Unity.Burst.Intrinsics.X86.Avx.mm256_permute_ps(outer2_Value0, 0b00_11_10_01);
-
-                    var outer0_X2 = global::Unity.Burst.Intrinsics.X86.Avx.mm256_permute_ps(outer0_X0, 0b01_00_11_10);
-                    var outer0_Y2 = global::Unity.Burst.Intrinsics.X86.Avx.mm256_permute_ps(outer0_Y0, 0b01_00_11_10);
-                    var outer1_Value2 = global::Unity.Burst.Intrinsics.X86.Avx.mm256_permute_ps(outer1_Value0, 0b01_00_11_10);
-                    var outer2_Value2 = global::Unity.Burst.Intrinsics.X86.Avx.mm256_permute_ps(outer2_Value0, 0b01_00_11_10);
-
-                    var outer0_X3 = global::Unity.Burst.Intrinsics.X86.Avx.mm256_permute_ps(outer0_X0, 0b10_01_00_11);
-                    var outer0_Y3 = global::Unity.Burst.Intrinsics.X86.Avx.mm256_permute_ps(outer0_Y0, 0b10_01_00_11);
-                    var outer1_Value3 = global::Unity.Burst.Intrinsics.X86.Avx.mm256_permute_ps(outer1_Value0, 0b10_01_00_11);
-                    var outer2_Value3 = global::Unity.Burst.Intrinsics.X86.Avx.mm256_permute_ps(outer2_Value0, 0b10_01_00_11);
+                    var outer0_X1 = global::Unity.Burst.Intrinsics.X86.Avx.mm256_permute_ps(outer0_X0, next1);
+                    var outer0_Y1 = global::Unity.Burst.Intrinsics.X86.Avx.mm256_permute_ps(outer0_Y0, next1);
+                    var outer1_Value1 = global::Unity.Burst.Intrinsics.X86.Avx.mm256_permute_ps(outer1_Value0, next1);
+                    var outer2_Value1 = global::Unity.Burst.Intrinsics.X86.Avx.mm256_permute_ps(outer2_Value0, next1);
+                    var outer0_X2 = global::Unity.Burst.Intrinsics.X86.Avx.mm256_permute_ps(outer0_X0, next2);
+                    var outer0_Y2 = global::Unity.Burst.Intrinsics.X86.Avx.mm256_permute_ps(outer0_Y0, next2);
+                    var outer1_Value2 = global::Unity.Burst.Intrinsics.X86.Avx.mm256_permute_ps(outer1_Value0, next2);
+                    var outer2_Value2 = global::Unity.Burst.Intrinsics.X86.Avx.mm256_permute_ps(outer2_Value0, next2);
+                    var outer0_X3 = global::Unity.Burst.Intrinsics.X86.Avx.mm256_permute_ps(outer0_X0, next3);
+                    var outer0_Y3 = global::Unity.Burst.Intrinsics.X86.Avx.mm256_permute_ps(outer0_Y0, next3);
+                    var outer1_Value3 = global::Unity.Burst.Intrinsics.X86.Avx.mm256_permute_ps(outer1_Value0, next3);
+                    var outer2_Value3 = global::Unity.Burst.Intrinsics.X86.Avx.mm256_permute_ps(outer2_Value0, next3);
 
                     var outer0_X4 = global::Unity.Burst.Intrinsics.X86.Avx.mm256_permute2f128_ps(outer0_X0, outer0_X0, 0b0000_0001);
                     var outer0_Y4 = global::Unity.Burst.Intrinsics.X86.Avx.mm256_permute2f128_ps(outer0_Y0, outer0_Y0, 0b0000_0001);
                     var outer1_Value4 = global::Unity.Burst.Intrinsics.X86.Avx.mm256_permute2f128_ps(outer1_Value0, outer1_Value0, 0b0000_0001);
                     var outer2_Value4 = global::Unity.Burst.Intrinsics.X86.Avx.mm256_permute2f128_ps(outer2_Value0, outer2_Value0, 0b0000_0001);
 
-                    var outer0_X5 = global::Unity.Burst.Intrinsics.X86.Avx.mm256_permute_ps(outer0_X4, 0b00_11_10_01);
-                    var outer0_Y5 = global::Unity.Burst.Intrinsics.X86.Avx.mm256_permute_ps(outer0_Y4, 0b00_11_10_01);
-                    var outer1_Value5 = global::Unity.Burst.Intrinsics.X86.Avx.mm256_permute_ps(outer1_Value4, 0b00_11_10_01);
-                    var outer2_Value5 = global::Unity.Burst.Intrinsics.X86.Avx.mm256_permute_ps(outer2_Value4, 0b00_11_10_01);
-
-                    var outer0_X6 = global::Unity.Burst.Intrinsics.X86.Avx.mm256_permute_ps(outer0_X4, 0b01_00_11_10);
-                    var outer0_Y6 = global::Unity.Burst.Intrinsics.X86.Avx.mm256_permute_ps(outer0_Y4, 0b01_00_11_10);
-                    var outer1_Value6 = global::Unity.Burst.Intrinsics.X86.Avx.mm256_permute_ps(outer1_Value4, 0b01_00_11_10);
-                    var outer2_Value6 = global::Unity.Burst.Intrinsics.X86.Avx.mm256_permute_ps(outer2_Value4, 0b01_00_11_10);
-
-                    var outer0_X7 = global::Unity.Burst.Intrinsics.X86.Avx.mm256_permute_ps(outer0_X4, 0b10_01_00_11);
-                    var outer0_Y7 = global::Unity.Burst.Intrinsics.X86.Avx.mm256_permute_ps(outer0_Y4, 0b10_01_00_11);
-                    var outer1_Value7 = global::Unity.Burst.Intrinsics.X86.Avx.mm256_permute_ps(outer1_Value4, 0b10_01_00_11);
-                    var outer2_Value7 = global::Unity.Burst.Intrinsics.X86.Avx.mm256_permute_ps(outer2_Value4, 0b10_01_00_11);
+                    var outer0_X5 = global::Unity.Burst.Intrinsics.X86.Avx.mm256_permute_ps(outer0_X4, next1);
+                    var outer0_Y5 = global::Unity.Burst.Intrinsics.X86.Avx.mm256_permute_ps(outer0_Y4, next1);
+                    var outer1_Value5 = global::Unity.Burst.Intrinsics.X86.Avx.mm256_permute_ps(outer1_Value4, next1);
+                    var outer2_Value5 = global::Unity.Burst.Intrinsics.X86.Avx.mm256_permute_ps(outer2_Value4, next1);
+                    var outer0_X6 = global::Unity.Burst.Intrinsics.X86.Avx.mm256_permute_ps(outer0_X4, next2);
+                    var outer0_Y6 = global::Unity.Burst.Intrinsics.X86.Avx.mm256_permute_ps(outer0_Y4, next2);
+                    var outer1_Value6 = global::Unity.Burst.Intrinsics.X86.Avx.mm256_permute_ps(outer1_Value4, next2);
+                    var outer2_Value6 = global::Unity.Burst.Intrinsics.X86.Avx.mm256_permute_ps(outer2_Value4, next2);
+                    var outer0_X7 = global::Unity.Burst.Intrinsics.X86.Avx.mm256_permute_ps(outer0_X4, next3);
+                    var outer0_Y7 = global::Unity.Burst.Intrinsics.X86.Avx.mm256_permute_ps(outer0_Y4, next3);
+                    var outer1_Value7 = global::Unity.Burst.Intrinsics.X86.Avx.mm256_permute_ps(outer1_Value4, next3);
+                    var outer2_Value7 = global::Unity.Burst.Intrinsics.X86.Avx.mm256_permute_ps(outer2_Value4, next3);
 
                     var innerPointer0 = innerOriginalPointer0;
                     var innerPointer1 = innerOriginalPointer1;
                     var innerPointer2 = innerOriginalPointer2;
                     for (
                         var innerIndex = 0;
-                        innerIndex < Inner0.Length;
+                        innerIndex < BulletPosition2D.Length;
                         ++innerIndex,
                         innerPointer0 += sizeof(ComponentTypes.Position2D.Eight),
                         innerPointer1 += sizeof(ComponentTypes.AliveState.Eight),
@@ -741,24 +746,24 @@ static partial class  CollisionHolder
                         global::Unity.Burst.Intrinsics.X86.Avx.mm256_store_ps(innerPointer1 + (0 << 5), inner1_Value);
                     }
 
+                    outer1_Value0 = Close2(outer1_Value0, global::Unity.Burst.Intrinsics.X86.Avx.mm256_permute2f128_ps(outer1_Value4, outer1_Value4, 0b0000_0001));
+                    outer1_Value1 = Close2(outer1_Value1, global::Unity.Burst.Intrinsics.X86.Avx.mm256_permute2f128_ps(outer1_Value5, outer1_Value5, 0b0000_0001));
+                    outer1_Value2 = Close2(outer1_Value2, global::Unity.Burst.Intrinsics.X86.Avx.mm256_permute2f128_ps(outer1_Value6, outer1_Value6, 0b0000_0001));
+                    outer1_Value3 = Close2(outer1_Value3, global::Unity.Burst.Intrinsics.X86.Avx.mm256_permute2f128_ps(outer1_Value7, outer1_Value7, 0b0000_0001));
                     outer1_Value1 = global::Unity.Burst.Intrinsics.X86.Avx.mm256_permute_ps(outer1_Value1, 0b10_01_00_11);
                     outer1_Value2 = global::Unity.Burst.Intrinsics.X86.Avx.mm256_permute_ps(outer1_Value2, 0b01_00_11_10);
                     outer1_Value3 = global::Unity.Burst.Intrinsics.X86.Avx.mm256_permute_ps(outer1_Value3, 0b00_11_10_01);
-                    outer1_Value4 = global::Unity.Burst.Intrinsics.X86.Avx.mm256_permute2f128_ps(outer1_Value4, outer1_Value4, 0b0000_0001);
-                    outer1_Value5 = global::Unity.Burst.Intrinsics.X86.Avx.mm256_permute_ps(global::Unity.Burst.Intrinsics.X86.Avx.mm256_permute2f128_ps(outer1_Value5, outer1_Value5, 0b0000_0001), 0b10_01_00_11);
-                    outer1_Value6 = global::Unity.Burst.Intrinsics.X86.Avx.mm256_permute_ps(global::Unity.Burst.Intrinsics.X86.Avx.mm256_permute2f128_ps(outer1_Value6, outer1_Value6, 0b0000_0001), 0b01_00_11_10);
-                    outer1_Value7 = global::Unity.Burst.Intrinsics.X86.Avx.mm256_permute_ps(global::Unity.Burst.Intrinsics.X86.Avx.mm256_permute2f128_ps(outer1_Value7, outer1_Value7, 0b0000_0001), 0b00_11_10_01);
-                    global::Unity.Burst.Intrinsics.X86.Avx.mm256_store_ps(outer1_Value, Close2(outer1_Value0, outer1_Value1, outer1_Value2, outer1_Value3, outer1_Value4, outer1_Value5, outer1_Value6, outer1_Value7));
+                    global::Unity.Burst.Intrinsics.X86.Avx.mm256_store_ps(outer1_Value, Close2(Close2(outer1_Value0, outer1_Value1), Close2(outer1_Value2, outer1_Value3)));
                 }
                 return;
             }
 
             {
-                for (var outerIndex = 0; outerIndex < Outer0.Length; ++outerIndex)
+                for (var outerIndex = 0; outerIndex < EnemyPosition2D.Length; ++outerIndex)
                 {
-                    var outer0 = Outer0[outerIndex];
-                    var outer1 = Outer1[outerIndex];
-                    var outer2 = Outer2[outerIndex];
+                    var outer0 = EnemyPosition2D[outerIndex];
+                    var outer1 = EnemyAliveState[outerIndex];
+                    var outer2 = EnemySize[outerIndex];
                     ref var outer0_X0 = ref outer0.X;
                     ref var outer0_X0_c0 = ref outer0_X0.c0;
                     var outer0_X1_c0 = outer0_X0.c0.wxyz;
@@ -795,11 +800,11 @@ static partial class  CollisionHolder
                     var outer2_Value1_c1 = outer2_Value0_c1.wxyz;
                     var outer2_Value2_c1 = outer2_Value0_c1.zwxy;
                     var outer2_Value3_c1 = outer2_Value0_c1.yzwx;
-                    for (var innerIndex = 0; innerIndex < Inner0.Length; ++innerIndex)
+                    for (var innerIndex = 0; innerIndex < BulletPosition2D.Length; ++innerIndex)
                     {
-                        var inner0 = Inner0[innerIndex];
-                        var inner1 = Inner1[innerIndex];
-                        var inner2 = Inner2[innerIndex];
+                        var inner0 = BulletPosition2D[innerIndex];
+                        var inner1 = BulletAliveState[innerIndex];
+                        var inner2 = BulletSize[innerIndex];
                         ref var inner0_X = ref inner0.X;
                         ref var inner0_Y = ref inner0.Y;
                         ref var inner1_Value = ref inner1.Value;
@@ -821,16 +826,314 @@ static partial class  CollisionHolder
                         Exe(ref outer0_X3_c0, ref outer0_Y3_c0, ref outer1_Value3_c0, ref outer2_Value3_c0, ref inner0_X.c1, ref inner0_Y.c1, ref inner1_Value.c1, ref inner2_Value.c1);
                         Exe(ref outer0_X3_c1, ref outer0_Y3_c1, ref outer1_Value3_c1, ref outer2_Value3_c1, ref inner0_X.c0, ref inner0_Y.c0, ref inner1_Value.c0, ref inner2_Value.c0);
                         Exe(ref outer0_X3_c1, ref outer0_Y3_c1, ref outer1_Value3_c1, ref outer2_Value3_c1, ref inner0_X.c1, ref inner0_Y.c1, ref inner1_Value.c1, ref inner2_Value.c1);
-                        Inner1[innerIndex] = inner1;
+                        BulletAliveState[innerIndex] = inner1;
                     }
 
-                    outer1_Value0.c0 = Close(outer1_Value0.c0, outer1_Value1_c0.yzwx, outer1_Value2_c0.zwxy, outer1_Value3_c0.wxyz);
-                    outer1_Value0.c1 = Close(outer1_Value0.c1, outer1_Value1_c1.yzwx, outer1_Value2_c1.zwxy, outer1_Value3_c1.wxyz);
-                    Outer1[outerIndex] = outer1;
+                    outer1_Value0.c0 = Close(Close(outer1_Value0.c0, outer1_Value1_c0.yzwx), Close(outer1_Value2_c0.zwxy, outer1_Value3_c0.wxyz));
+                    outer1_Value0.c1 = Close(Close(outer1_Value0.c1, outer1_Value1_c1.yzwx), Close(outer1_Value2_c1.zwxy, outer1_Value3_c1.wxyz));
+                    EnemyAliveState[outerIndex] = outer1;
                 }
             }
         }
     }
 }
+```
+</div></details>
+
+高効率なボイラープレートコードを自動で生成してくれるのは大変ありがたいものだと私は思います。<br/>
+以下のコードは最高効率からは少しだけ劣りますが、定型的なコードとしては最大限高速化されているものだと言えると思います。<br/>
+これより速く効率の良いものが欲しいのであるならばもなな部長に「たすけて！」と求めるしか無いでしょう。巻乃さんなら作れます。
+
+## 実際どの程度速いのか
+
+今現在私が作り直しているシューティングゲームだとシェーダーも専用のそれに作り直していることもあり、10万ユニット位の移動でも60FPSを保てています。<br/>
+
+# 如何にしてコードを生成するのか
+
+コード生成するのにもかなりボイラープレートコードが必要でした。<br/>
+特にRoslynを用いて属性の解釈を行う場合、コンストラクタ引数を相手にするのが一番手間が少ないのですが、それでも配列を相手にすると型の検証やらナニやらで大変面倒です……<br/>
+何度「たすけて！もなふわすi～z～m！」を叫んだことでしょうか……
+
+<details><summary>コード生成時に参照する属性.cs</summary><div>
+
+```csharp
+using System;
+using Unity.Burst.Intrinsics;
+using Unity.Mathematics;
+
+namespace MyAttribute
+{
+    public enum IntrinsicsKind
+    {
+        Ordinal,
+        Fma,
+    }
+
+    [AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct)]
+    public class SingleLoopTypeAttribute : Attribute
+    {
+        public readonly Type[] TypeArray;
+        public readonly bool[] IsReadOnlyArray;
+        public readonly string NamePrefix;
+        public readonly Type[] OtherTypeArray;
+        public readonly bool[] OtherIsReadOnlyArray;
+        public readonly string[] OtherNameArray;
+        public readonly Type[] TableTypeArray;
+        public readonly bool[] TableIsReadOnlyArray;
+        public readonly string[] TableNameArray;
+
+        public SingleLoopTypeAttribute(Type[] typeArray, bool[] isReadOnlyArray, string namePrefix) : this(typeArray, isReadOnlyArray, namePrefix, Array.Empty<Type>(), Array.Empty<bool>(), Array.Empty<string>()) { }
+
+        public SingleLoopTypeAttribute(Type[] typeArray, bool[] isReadOnlyArray, string namePrefix, Type[] otherTypeArray, bool[] otherIsReadOnlyArray, string[] otherNameArray) : this(typeArray, isReadOnlyArray, namePrefix, otherTypeArray, otherIsReadOnlyArray, otherNameArray, Array.Empty<Type>(), Array.Empty<bool>(), Array.Empty<string>()) { }
+
+        public SingleLoopTypeAttribute(Type[] typeArray, bool[] isReadOnlyArray, string namePrefix, Type[] otherTypeArray, bool[] otherIsReadOnlyArray, string[] otherNameArray, Type[] tableTypeArray, bool[] tableIsReadOnlyArray, string[] tableNameArray)
+        {
+            TypeArray = typeArray;
+            IsReadOnlyArray = isReadOnlyArray;
+            NamePrefix = namePrefix;
+            OtherTypeArray = otherTypeArray;
+            OtherIsReadOnlyArray = otherIsReadOnlyArray;
+            OtherNameArray = otherNameArray;
+            TableTypeArray = tableTypeArray;
+            TableIsReadOnlyArray = tableIsReadOnlyArray;
+            TableNameArray = tableNameArray;
+        }
+    }
+
+    [AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct)]
+    public class CollisionTypeAttribute : Attribute
+    {
+        public readonly Type[] OuterTypeArray;
+        public readonly bool[] OuterIsReadOnlyArray;
+        public readonly string OuterNamePrefix;
+        public readonly Type[] InnerTypeArray;
+        public readonly bool[] InnerIsReadOnlyArray;
+        public readonly string InnerNamePrefix;
+        public readonly Type[] OtherTypeArray;
+        public readonly bool[] OtherIsReadOnlyArray;
+        public readonly string[] OtherNameArray;
+        public readonly Type[] TableTypeArray;
+        public readonly bool[] TableIsReadOnlyArray;
+        public readonly string[] TableNameArray;
+
+        public CollisionTypeAttribute(Type[] outerTypeArray, bool[] outerIsReadOnlyArray, string outerNamePrefix, Type[] innerTypeArray, bool[] innerIsReadOnlyArray, string innerNamePrefix) : this(outerTypeArray, outerIsReadOnlyArray, outerNamePrefix, innerTypeArray, innerIsReadOnlyArray, innerNamePrefix, Array.Empty<Type>(), Array.Empty<bool>(), Array.Empty<string>()) { }
+
+        public CollisionTypeAttribute(Type[] outerTypeArray, bool[] outerIsReadOnlyArray, string outerNamePrefix, Type[] innerTypeArray, bool[] innerIsReadOnlyArray, string innerNamePrefix, Type[] otherTypeArray, bool[] otherIsReadOnlyArray, string[] otherNameArray) : this(outerTypeArray, outerIsReadOnlyArray, outerNamePrefix, innerTypeArray, innerIsReadOnlyArray, innerNamePrefix, otherTypeArray, otherIsReadOnlyArray, otherNameArray, Array.Empty<Type>(), Array.Empty<bool>(), Array.Empty<string>()) { }
+
+        public CollisionTypeAttribute(Type[] outerTypeArray, bool[] outerIsReadOnlyArray, string outerNamePrefix, Type[] innerTypeArray, bool[] innerIsReadOnlyArray, string innerNamePrefix, Type[] otherTypeArray, bool[] otherIsReadOnlyArray, string[] otherNameArray, Type[] tableTypeArray, bool[] tableIsReadOnlyArray, string[] tableNameArray)
+        {
+            OuterTypeArray = outerTypeArray;
+            OuterIsReadOnlyArray = outerIsReadOnlyArray;
+            OuterNamePrefix = outerNamePrefix;
+            InnerTypeArray = innerTypeArray;
+            InnerIsReadOnlyArray = innerIsReadOnlyArray;
+            InnerNamePrefix = innerNamePrefix;
+            OtherTypeArray = otherTypeArray;
+            OtherIsReadOnlyArray = otherIsReadOnlyArray;
+            OtherNameArray = otherNameArray;
+            TableTypeArray = tableTypeArray;
+            TableIsReadOnlyArray = tableIsReadOnlyArray;
+            TableNameArray = tableNameArray;
+        }
+    }
+
+    [AttributeUsage(AttributeTargets.Method)]
+    public class MethodIntrinsicsKindAttribute : Attribute
+    {
+        public readonly IntrinsicsKind Intrinsics;
+
+        public MethodIntrinsicsKindAttribute(IntrinsicsKind intrinsics)
+        {
+            Intrinsics = intrinsics;
+        }
+    }
+
+    [AttributeUsage(AttributeTargets.Method)]
+    public class CollisionCloseMethodAttribute : Attribute
+    {
+        public readonly IntrinsicsKind Intrinsics;
+        public readonly int FieldIndex;
+        public readonly string FieldName;
+
+        public CollisionCloseMethodAttribute(IntrinsicsKind intrinsics, int fieldIndex, string fieldName)
+        {
+            Intrinsics = intrinsics;
+            FieldIndex = fieldIndex;
+            FieldName = fieldName;
+        }
+    }
+
+    public class EightAttribute : Attribute { }
+
+    public class CountableAttribute : Attribute { }
+}
+```
+</div></details>
+
+万が一リフレクションしたいという場合に備えて一応記述しておりますが、C# Source Generatorから使用する分に限ればフィールド定義も不要で、コンストラクタの内部の記述も不要な可能性はあります。<br/>
+
+<details><summary>アナライザーコード本体.cs</summary><div>
+
+```csharp
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.Text;
+using System.Collections.Generic;
+using System.Text;
+using MyAnalyzer.Templates;
+
+namespace MyAnalyzer
+{
+    [Generator]
+    public class MyGenerator : ISourceGenerator
+    {
+        public void Initialize(GeneratorInitializationContext context)
+        {
+            // System.Diagnostics.Debugger.Launch();
+            context.RegisterForSyntaxNotifications(() => new SyntaxReceiver());
+        }
+
+        public void Execute(GeneratorExecutionContext context)
+        {
+            if (!(context.SyntaxReceiver is SyntaxReceiver receiver))
+            {
+                return;
+            }
+
+            var buffer = new StringBuilder();
+            ExtractTypeSymbols(receiver, context.Compilation, out var eightBaseTypes, out var countableBaseTypes, out var collisionTemplates, out var singleLoopTemplates);
+
+            GenerateEight(eightBaseTypes, buffer);
+            GenerateCountable(countableBaseTypes, buffer);
+            collisionTemplates.ForEach(template => buffer.AppendLine(template.TransformText()));
+            singleLoopTemplates.ForEach(template => buffer.AppendLine(template.TransformText()));
+
+            var encoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
+            var text = buffer.ToString();
+            context.AddSource("MyAnalyzerResult.cs", SourceText.From(text, encoding));
+        }
+
+        private static void GenerateEight(List<INamedTypeSymbol> eightBaseTypes, StringBuilder buffer)
+        {
+            foreach (var namedTypeSymbol in eightBaseTypes)
+            {
+                var template = new EightTemplate(namedTypeSymbol);
+                buffer.AppendLine(template.TransformText());
+            }
+        }
+
+        private static void GenerateCountable(List<(INamedTypeSymbol, AttributeData)> countableBaseTypes, StringBuilder buffer)
+        {
+            foreach (var (namedTypeSymbol, attributeData) in countableBaseTypes)
+            {
+                var template = new CountableTemplate(namedTypeSymbol, attributeData);
+                buffer.AppendLine(template.TransformText());
+            }
+        }
+
+        private static void ExtractTypeSymbols(SyntaxReceiver receiver, Compilation compilation, out List<INamedTypeSymbol> eightBaseTypes, out List<(INamedTypeSymbol, AttributeData)> countableBaseTypes, out List<CollisionTemplate> collisionTemplates, out List<SingleLoopTemplate> singleLoopTemplates)
+        {
+            var eight = compilation.GetTypeByMetadataName("MyAttribute.EightAttribute") ?? throw new System.NullReferenceException();
+            var countable = compilation.GetTypeByMetadataName("MyAttribute.CountableAttribute") ?? throw new System.NullReferenceException();
+            var collisionType = compilation.GetTypeByMetadataName("MyAttribute.CollisionTypeAttribute") ?? throw new System.NullReferenceException();
+            var intrinsicsKindMethod = compilation.GetTypeByMetadataName("MyAttribute.MethodIntrinsicsKindAttribute") ?? throw new System.NullReferenceException();
+            var collisionCloseMethod = compilation.GetTypeByMetadataName("MyAttribute.CollisionCloseMethodAttribute") ?? throw new System.NullReferenceException();
+            var loopType = compilation.GetTypeByMetadataName("MyAttribute.SingleLoopTypeAttribute") ?? throw new System.NullReferenceException();
+
+            var candidateTypesCount = receiver.CandidateTypes.Count;
+            eightBaseTypes = new(candidateTypesCount);
+            countableBaseTypes = new(candidateTypesCount);
+            collisionTemplates = new(candidateTypesCount);
+            singleLoopTemplates = new(candidateTypesCount);
+            foreach (var candidate in receiver.CandidateTypes)
+            {
+                var model = compilation.GetSemanticModel(candidate.SyntaxTree);
+                var type = model.GetDeclaredSymbol(candidate);
+                if (type is null)
+                {
+                    continue;
+                }
+
+                if (type.IsUnmanagedType)
+                {
+                    foreach (var attributeData in type.GetAttributes())
+                    {
+                        var attributeClass = attributeData.AttributeClass;
+                        if (attributeClass is null)
+                        {
+                            continue;
+                        }
+
+                        if (SymbolEqualityComparer.Default.Equals(attributeClass, eight))
+                        {
+                            eightBaseTypes.Add(type);
+                            break;
+                        }
+
+                        if (SymbolEqualityComparer.Default.Equals(attributeClass, countable))
+                        {
+                            countableBaseTypes.Add((type, attributeData));
+                            break;
+                        }
+                    }
+                }
+                else
+                {
+                    {
+                        var template = CollisionTemplate.TryCreate(collisionType, intrinsicsKindMethod, collisionCloseMethod, type);
+                        if (template is not null)
+                        {
+                            collisionTemplates.Add(template);
+                        }
+                    }
+                    {
+                        var template = SingleLoopTemplate.TryCreate(loopType, intrinsicsKindMethod, type);
+                        if (template is not null)
+                        {
+                            singleLoopTemplates.Add(template);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    internal class SyntaxReceiver : ISyntaxReceiver
+    {
+        public List<TypeDeclarationSyntax> CandidateTypes { get; } = new List<TypeDeclarationSyntax>();
+
+        public void OnVisitSyntaxNode(SyntaxNode syntaxNode)
+        {
+            if (!(syntaxNode is TypeDeclarationSyntax typeDeclarationSyntax)
+                || typeDeclarationSyntax.AttributeLists.Count <= 0)
+            {
+                return;
+            }
+
+            foreach (var modifier in typeDeclarationSyntax.Modifiers)
+            {
+                if (modifier.Text != "partial")
+                {
+                    continue;
+                }
+
+                CandidateTypes.Add(typeDeclarationSyntax);
+                return;
+            }
+        }
+    }
+}
+```
+</div></details>
+
+<details><summary>.tt</summary><div>
+
+```
+```
+</div></details>
+
+<details><summary>.tt</summary><div>
+
+```
 ```
 </div></details>
