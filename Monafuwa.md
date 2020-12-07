@@ -17,6 +17,8 @@
 この記事は私がもなふわすい～とる～むに助けを求めた事例について記載しています。<br/>
 巻乃もなか氏についての魅力を語りつくす類の記事ではないことをご了承ください。
 
+大体ここに書いた内容はSHOWROOM社のエンジニアにとっては常識らしいのですごいですね。
+
 # これを読む際の理解を助けるもなふわな記事たち
 
 最初にこの記事を読むに当たって理解の助けになると思われる記事を列挙します。<br/>
@@ -1003,32 +1005,24 @@ namespace MyAnalyzer
             var buffer = new StringBuilder();
             ExtractTypeSymbols(receiver, context.Compilation, out var eightBaseTypes, out var countableBaseTypes, out var collisionTemplates, out var singleLoopTemplates);
 
-            GenerateEight(eightBaseTypes, buffer);
-            GenerateCountable(countableBaseTypes, buffer);
+            foreach (var namedTypeSymbol in eightBaseTypes)
+            {
+                var template = new EightTemplate(namedTypeSymbol);
+                buffer.AppendLine(template.TransformText());
+            }
+            
+            foreach (var (namedTypeSymbol, attributeData) in countableBaseTypes)
+            {
+                var template = new CountableTemplate(namedTypeSymbol, attributeData);
+                buffer.AppendLine(template.TransformText());
+            }
+
             collisionTemplates.ForEach(template => buffer.AppendLine(template.TransformText()));
             singleLoopTemplates.ForEach(template => buffer.AppendLine(template.TransformText()));
 
             var encoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
             var text = buffer.ToString();
             context.AddSource("MyAnalyzerResult.cs", SourceText.From(text, encoding));
-        }
-
-        private static void GenerateEight(List<INamedTypeSymbol> eightBaseTypes, StringBuilder buffer)
-        {
-            foreach (var namedTypeSymbol in eightBaseTypes)
-            {
-                var template = new EightTemplate(namedTypeSymbol);
-                buffer.AppendLine(template.TransformText());
-            }
-        }
-
-        private static void GenerateCountable(List<(INamedTypeSymbol, AttributeData)> countableBaseTypes, StringBuilder buffer)
-        {
-            foreach (var (namedTypeSymbol, attributeData) in countableBaseTypes)
-            {
-                var template = new CountableTemplate(namedTypeSymbol, attributeData);
-                buffer.AppendLine(template.TransformText());
-            }
         }
 
         private static void ExtractTypeSymbols(SyntaxReceiver receiver, Compilation compilation, out List<INamedTypeSymbol> eightBaseTypes, out List<(INamedTypeSymbol, AttributeData)> countableBaseTypes, out List<CollisionTemplate> collisionTemplates, out List<SingleLoopTemplate> singleLoopTemplates)
@@ -1100,7 +1094,7 @@ namespace MyAnalyzer
 
     internal class SyntaxReceiver : ISyntaxReceiver
     {
-        public List<TypeDeclarationSyntax> CandidateTypes { get; } = new List<TypeDeclarationSyntax>();
+        public List<TypeDeclarationSyntax> CandidateTypes { get; } = new();
 
         public void OnVisitSyntaxNode(SyntaxNode syntaxNode)
         {
@@ -1126,9 +1120,567 @@ namespace MyAnalyzer
 ```
 </div></details>
 
-<details><summary>.tt</summary><div>
+`Initializeで`SyntaxReceiver`というものを登録します。<br/>
+これはC#の[構文木](https://ja.wikipedia.org/wiki/%E6%8A%BD%E8%B1%A1%E6%A7%8B%E6%96%87%E6%9C%A8)の各ノードを走査するものです。<br/>
+走査中に条件を満足する候補Nodeをリストに収録するという使い方が標準的でしょう。<br/>
+私は実際設計原則にこだわるのはあほらしいと思いますが、しかし、このVisitorパターンではNodeの具体的な型を調べなくてはなりません。<br/>
+ポリモーフィズムに真っ向から喧嘩を売っていますね。「たすけて！もなふわすい～とる～む！」
+
+今回のコード生成では対象の型の中にネストされた特別な型を生成します。<br/>
+そのため`partial`修飾子が指定されている型のみをスクリーニングしました。
+
+その後`void Execute(GeneratorExecutionContext context)`メソッドが実行されます。<br/>
+なぜ`Initialize`と`Execute`が分離しているのか、その詳細な理由はMDCのSHOWROOM社員のゴリラ氏がご存知でしょう。
+
+`Execute`内では`ExtractTypeSymbols(receiver, context.Compilation, out var eightBaseTypes, out var countableBaseTypes, out var collisionTemplates, out var singleLoopTemplates);`を呼び出しています。<br/>
+SyntaxReceiverが雑に収集した候補の型をここで精査します。
+
+```csharp
+var eight = compilation.GetTypeByMetadataName("MyAttribute.EightAttribute") ?? throw new System.NullReferenceException();
+var countable = compilation.GetTypeByMetadataName("MyAttribute.CountableAttribute") ?? throw new System.NullReferenceException();
+var collisionType = compilation.GetTypeByMetadataName("MyAttribute.CollisionTypeAttribute") ?? throw new System.NullReferenceException();
+var intrinsicsKindMethod = compilation.GetTypeByMetadataName("MyAttribute.MethodIntrinsicsKindAttribute") ?? throw new System.NullReferenceException();
+var collisionCloseMethod = compilation.GetTypeByMetadataName("MyAttribute.CollisionCloseMethodAttribute") ?? throw new System.NullReferenceException();
+var loopType = compilation.GetTypeByMetadataName("MyAttribute.SingleLoopTypeAttribute") ?? throw new System.NullReferenceException();
+```
+
+まず最初に属性を用意します。<br/>
+処理対象のUnityプロジェクトに型がきちんとリンクされていない場合`null`になるのでぬるりと死にます。
+
+```csharp
+var model = compilation.GetSemanticModel(candidate.SyntaxTree);
+var type = model.GetDeclaredSymbol(candidate);
+if (type is null)
+{
+    continue;
+}
+```
+
+実際対象の型を表すSyntaxNodeから型の諸々具体的な情報を得たいと思います。<br/>
+よくわからないのですが、セマンティックモデルを取得してから型のSymbolを得る必要がありました。
+
+
+```csharp
+if (type.IsUnmanagedType)
+{
+    foreach (var attributeData in type.GetAttributes())
+    {
+        var attributeClass = attributeData.AttributeClass;
+        if (attributeClass is null)
+        {
+            continue;
+        }
+```
+
+`NamedTypeSymbol`に対してC#7.3から導入された`unmanaged`制約を満たすかどうかを`IsUnmanagedType`プロパティで調べ、その真偽に応じて処理を振り分けます。<br/>
+unamangedな構造体であるならばその型に付与された属性を列挙して検査します。
+
+```csharp
+if (SymbolEqualityComparer.Default.Equals(attributeClass, eight))
+{
+    eightBaseTypes.Add(type);
+    break;
+}
+```
+
+属性型シンボルの等値性比較は`==`演算子では不正確です。<br/>
+これを知らず、もなふわすい～とる～むにたすけを求めたこともありました。<br/>
+`SymbolEqualityComparer`クラスこそが巻乃もなかさんの齎した福音であり、救済です。<br/>
+`Default`と`IncludeNullability`の２つのメンバーが生えていますが、基本的に前者を利用して等値性比較をしていきます。(後者はC#8から導入されたnullable reference type用アノテーションまで考慮した等値性比較を行います。)
+
+```csharp
+var template = SingleLoopTemplate.TryCreate(loopType, intrinsicsKindMethod, type);
+if (template is not null)
+{
+    singleLoopTemplates.Add(template);
+}
+```
+
+そして候補を元にT4のランタイムテキストテンプレートクラスオブジェクトを`TryCreate`で作成します。
+
+<details><summary>ちなみにアナライザ―のcsprojはこの通りです。</summary><div>
+
+かなりT4に依存していることがわかります。
+
+```xml
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+	  <LangVersion>9.0</LangVersion>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="3.8.0" />
+    <PackageReference Include="System.CodeDom" Version="4.7.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="Templates\CollisionTemplate.tt">
+      <Generator>TextTemplatingFilePreprocessor</Generator>
+      <LastGenOutput>CollisionTemplate.cs</LastGenOutput>
+    </None>
+    <None Update="Templates\CountableTemplate.tt">
+      <Generator>TextTemplatingFilePreprocessor</Generator>
+      <LastGenOutput>CountableTemplate.cs</LastGenOutput>
+    </None>
+    <None Update="Templates\EightTemplate.tt">
+      <Generator>TextTemplatingFilePreprocessor</Generator>
+      <LastGenOutput>EightTemplate.cs</LastGenOutput>
+    </None>
+    <None Update="Templates\SingleLoopTemplate.tt">
+      <Generator>TextTemplatingFilePreprocessor</Generator>
+      <LastGenOutput>SingleLoopTemplate.cs</LastGenOutput>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Service Include="{508349b6-6b84-4df5-91f0-309beebad82d}" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Update="Templates\CollisionTemplate.cs">
+      <DesignTime>True</DesignTime>
+      <AutoGen>True</AutoGen>
+      <DependentUpon>CollisionTemplate.tt</DependentUpon>
+    </Compile>
+    <Compile Update="Templates\CountableTemplate.cs">
+      <DesignTime>True</DesignTime>
+      <AutoGen>True</AutoGen>
+      <DependentUpon>CountableTemplate.tt</DependentUpon>
+    </Compile>
+    <Compile Update="Templates\EightTemplate.cs">
+      <DesignTime>True</DesignTime>
+      <AutoGen>True</AutoGen>
+      <DependentUpon>EightTemplate.tt</DependentUpon>
+    </Compile>
+    <Compile Update="Templates\SingleLoopTemplate.cs">
+      <DesignTime>True</DesignTime>
+      <AutoGen>True</AutoGen>
+      <DependentUpon>SingleLoopTemplate.tt</DependentUpon>
+    </Compile>
+  </ItemGroup>
+
+</Project>
+```
+</div></details>
+
+<details><summary>SingleLoopTemplate.cs</summary><div>
+
+```csharp
+using System;
+using System.Collections.Generic;
+using System.Collections.Immutable;
+using System.Linq;
+using Microsoft.CodeAnalysis;
+
+namespace MyAnalyzer.Templates
+{
+    public partial class SingleLoopTemplate
+    {
+        public readonly INamedTypeSymbol TypeSymbol;
+        public readonly TypeStruct[] Outers;
+        public readonly TypeStruct[] Others;
+        public readonly TypeStruct[] Tables;
+
+        public readonly MethodStruct Ordinal;
+        public readonly MethodStruct? Fma;
+
+        public SingleLoopTemplate(INamedTypeSymbol typeSymbol, TypeStruct[] outers, TypeStruct[] others, TypeStruct[] tables, MethodStruct ordinal, MethodStruct? fma)
+        {
+            TypeSymbol = typeSymbol;
+            Outers = outers;
+            Others = others;
+            Tables = tables;
+            Ordinal = ordinal;
+            Fma = fma;
+        }
+
+        public static SingleLoopTemplate? TryCreate(ISymbol loopType, ISymbol intrinsicsKindMethod, INamedTypeSymbol typeSymbol)
+        {
+            var comparer = SymbolEqualityComparer.Default;
+            if (!InterpretLoopType(loopType, typeSymbol, comparer, out var outers, out var others, out var tables))
+            {
+                return default;
+            }
+
+            if (!CollectLoop(intrinsicsKindMethod, typeSymbol, comparer, outers, others, tables, out var ordinal, out var fma))
+            {
+                return default;
+            }
+
+            return new(typeSymbol, outers, others, tables, ordinal, fma);
+        }
+
+        private static bool InterpretLoopType(ISymbol loopType, INamedTypeSymbol typeSymbol, SymbolEqualityComparer comparer, out TypeStruct[] outers, out TypeStruct[] others, out TypeStruct[] tables)
+        {
+            outers = Array.Empty<TypeStruct>();
+            others = Array.Empty<TypeStruct>();
+            tables = Array.Empty<TypeStruct>();
+
+            var typeAttr = typeSymbol.GetAttributes().SingleOrDefault(x => comparer.Equals(x.AttributeClass, loopType));
+            if (typeAttr is null)
+            {
+                return false;
+            }
+
+            var arguments = typeAttr.ConstructorArguments;
+            var length = arguments.Length;
+            if (length < 2)
+            {
+                return false;
+            }
+
+            if (!TypeStruct.InterpretCollisionTypeLoopFields(arguments[0].Values, arguments[1].Values, arguments[2].Value as string, out outers))
+            {
+                return false;
+            }
+
+            if (length == 3)
+            {
+                return true;
+            }
+
+            if (length < 6)
+            {
+                return false;
+            }
+
+            if (!TypeStruct.InterpretCollisionTypeLoopFields(arguments[3].Values, arguments[4].Values, arguments[5].Values, out others))
+            {
+                return false;
+            }
+
+            if (length == 6)
+            {
+                return true;
+            }
+
+            if (length < 9)
+            {
+                return false;
+            }
+
+            return TypeStruct.InterpretCollisionTypeLoopFields(arguments[6].Values, arguments[7].Values, arguments[8].Values, out tables);
+        }
+
+
+        private static bool CollectLoop(ISymbol loopMethod, INamedTypeSymbol typeSymbol, SymbolEqualityComparer comparer, TypeStruct[] outers, TypeStruct[] others, TypeStruct[] tables, out MethodStruct ordinal, out MethodStruct? fma)
+        {
+            var isOrdinalInitialized = false;
+            ordinal = default;
+            fma = default;
+            List<ParameterStruct> parameterOuters = new();
+            List<ParameterStruct> parameterOthers = new();
+            List<ParameterStruct> parameterTables = new();
+            foreach (var member in typeSymbol.GetMembers())
+            {
+                if (member is not IMethodSymbol methodSymbol)
+                {
+                    continue;
+                }
+
+                var attributeData = member.GetAttributes().SingleOrDefault(x => comparer.Equals(x.AttributeClass, loopMethod));
+                var array = attributeData?.ConstructorArguments;
+                if (array?[0].Value is not int kind)
+                {
+                    continue;
+                }
+
+                var intrinsicsKind = (IntrinsicsKind)kind;
+                switch (intrinsicsKind)
+                {
+                    case IntrinsicsKind.Ordinal:
+                    case IntrinsicsKind.Fma:
+                        break;
+                    default:
+                        return false;
+                }
+
+                parameterOuters.Clear();
+                parameterOthers.Clear();
+                parameterTables.Clear();
+                var parameters = methodSymbol.Parameters;
+                var parameterIndex = 0;
+                for (var typeIndex = 0; typeIndex < outers.Length; ++typeIndex)
+                {
+                    var typeStruct = outers[typeIndex];
+                    foreach (var member2 in typeStruct.Symbol.GetMembers())
+                    {
+                        if (member2 is not IFieldSymbol fieldSymbol || fieldSymbol.IsStatic)
+                        {
+                            continue;
+                        }
+
+                        parameterOuters.Add(new(parameters[parameterIndex++], typeIndex, fieldSymbol.Name));
+                    }
+                }
+
+                for (var typeIndex = 0; typeIndex < others.Length; ++typeIndex)
+                {
+                    parameterOthers.Add(new(parameters[parameterIndex++], typeIndex, string.Empty));
+                }
+
+                for (var typeIndex = 0; typeIndex < tables.Length; ++typeIndex, parameterIndex += 2)
+                {
+                    parameterTables.Add(new(parameters[parameterIndex], typeIndex, string.Empty));
+                }
+
+                switch (intrinsicsKind)
+                {
+                    case IntrinsicsKind.Ordinal:
+                        isOrdinalInitialized = true;
+                        ordinal = new MethodStruct(methodSymbol, parameterOuters.ToArray(), parameterOthers.ToArray(), parameterTables.ToArray());
+                        break;
+                    case IntrinsicsKind.Fma:
+                        fma = new MethodStruct(methodSymbol, parameterOuters.ToArray(), parameterOthers.ToArray(), parameterTables.ToArray());
+                        break;
+                }
+            }
+
+            return isOrdinalInitialized;
+        }
+
+        public readonly struct MethodStruct
+        {
+            public readonly IMethodSymbol Symbol;
+            public readonly ParameterStruct[] Outers;
+            public readonly ParameterStruct[] Others;
+            public readonly ParameterStruct[] Tables;
+
+            public MethodStruct(IMethodSymbol symbol, ParameterStruct[] outers, ParameterStruct[] others, ParameterStruct[] tables)
+            {
+                Symbol = symbol;
+                Outers = outers;
+                Others = others;
+                Tables = tables;
+            }
+        }
+    }
+
+    public readonly struct TypeStruct
+    {
+        public readonly INamedTypeSymbol Symbol;
+        public readonly bool IsReadOnly;
+        public readonly string Name;
+
+        public TypeStruct(INamedTypeSymbol symbol, bool isReadOnly, string name)
+        {
+            Symbol = symbol;
+            IsReadOnly = isReadOnly;
+            Name = name;
+        }
+
+        public static bool InterpretCollisionTypeLoopFields(ImmutableArray<TypedConstant> types, ImmutableArray<TypedConstant> bools, string? prefix, out TypeStruct[] answer)
+        {
+            answer = Array.Empty<TypeStruct>();
+            if (prefix is null)
+            {
+                return false;
+            }
+
+            if (types.Length == 0 || types.Length != bools.Length)
+            {
+                return false;
+            }
+
+            answer = new TypeStruct[types.Length];
+            for (var i = 0; i < answer.Length; i++)
+            {
+                if (types[i].Value is not INamedTypeSymbol typeSymbol || bools[i].Value is not bool boolValue)
+                {
+                    return false;
+                }
+
+                answer[i] = new(typeSymbol, boolValue, prefix + typeSymbol.Name);
+            }
+
+            return true;
+        }
+
+        public static bool InterpretCollisionTypeLoopFields(ImmutableArray<TypedConstant> types, ImmutableArray<TypedConstant> bools, ImmutableArray<TypedConstant> names, out TypeStruct[] answer)
+        {
+            answer = Array.Empty<TypeStruct>();
+            if (types.Length == 0 || types.Length != bools.Length)
+            {
+                return false;
+            }
+
+            answer = new TypeStruct[types.Length];
+            for (var i = 0; i < answer.Length; i++)
+            {
+                if (types[i].Value is not INamedTypeSymbol typeSymbol)
+                {
+                    return false;
+                }
+
+                if (bools[i].Value is not bool boolValue)
+                {
+                    return false;
+                }
+
+                if (names[i].Value is not string nameValue)
+                {
+                    return false;
+                }
+
+                answer[i] = new(typeSymbol, boolValue, nameValue);
+            }
+
+            return true;
+        }
+    }
+}
+```
+</div></details>
+
+デバッガビリティのために条件文を一纏めにしていません。<br/>
+C# Source Generatorのデバッグは非常にめんどくさいため、多少文字数は増えてもデバッガビリティを上げましょう。もなふわすい～とお祈りタイムが減ります。
+
+上記処理では属性のコンストラクタ引数である`TypedConstant`オブジェクトを良い感じに解釈していっています。<br/>
+[C#の属性に持たせられる情報は非常に限定的です。](https://docs.microsoft.com/ja-jp/dotnet/csharp/language-reference/language-specification/attributes#attribute-parameter-types)<br/>
+そのため、自作の構造体を使用したい場合でも諦めざるを得ません。<br/>
+無敵のダーク巻乃さんがMSに命令してくれたらなんとかなると思うのですが……
+
+さて、`TryCreate`で適切なオブジェクトを生成した後は`TransformText`でソースコードを生成します。<br/>
+以下がそのテンプレートコードです。
+
+<details><summary>SingleLoop.tt</summary><div>
 
 ```
+<#@ template language="C#" #>
+<#@ assembly name="System.Core" #>
+<#@ import namespace="System.Linq" #>
+<#@ import namespace="System.Text" #>
+<#@ import namespace="System.Collections.Generic" #>
+namespace <#= TypeSymbol.ContainingNamespace.ToDisplayString() #>
+{
+    <#= TypeSymbol.IsStatic ? "static " : "" #>partial <#= TypeSymbol.IsValueType ? "struct " : "class " #> <#= TypeSymbol.Name #>
+    {
+        [global::Unity.Burst.BurstCompile]
+        public unsafe partial struct Job : global::Unity.Jobs.IJob
+        {
+<# for (var index = 0; index < Outers.Length; ++index) {
+    var item = Outers[index]; #>
+            <# if (item.IsReadOnly) { #>[global::Unity.Collections.ReadOnly] <# } #>public global::Unity.Collections.NativeArray<<#= item.Symbol.ToDisplayString() #>.Eight> <#= item.Name #>;
+<# } #>
+<# for (var index = 0; index < Others.Length; ++index) {
+    var item = Others[index]; 
+    if (item.IsReadOnly) { #>
+            public <#= item.Symbol.ToDisplayString() #> <#= item.Name #>;
+<# } else { #>
+            [global::Unity.Collections.LowLevel.Unsafe.NativeDisableContainerSafetyRestrictionAttribute] 
+            public global::Unity.Collections.NativeArray<<#= item.Symbol.ToDisplayString() #>> <#= item.Name #>;
+<# } #>
+<# } #>
+<# for (var index = 0; index < Tables.Length; ++index) {
+    var item = Tables[index]; #>
+            <# if (item.IsReadOnly) { #>[global::Unity.Collections.ReadOnly] <# } else { #>[global::Unity.Collections.LowLevel.Unsafe.NativeDisableContainerSafetyRestrictionAttribute] <# } #>
+
+            public global::Unity.Collections.NativeArray<<#= item.Symbol.ToDisplayString() #>> <#= item.Name #>;
+<# } #>
+
+            public void Execute()
+            {
+<# for (var index = 0; index < Tables.Length; ++index) {
+    var item = Tables[index];
+    if (item.IsReadOnly) { #>
+                var tablePointer<#= index #> = global::Unity.Collections.LowLevel.Unsafe.NativeArrayUnsafeUtility.GetUnsafeReadOnlyPtr(<#= item.Name #>);
+<# } else { #>
+                var tablePointer<#= index #> = global::Unity.Collections.LowLevel.Unsafe.NativeArrayUnsafeUtility.GetUnsafeBufferPointerWithoutChecks(<#= item.Name #>);
+<# } #>
+<# } #>
+<# if (Fma.HasValue) { var method = Fma.Value; #>
+                if (global::Unity.Burst.Intrinsics.X86.Fma.IsFmaSupported)
+                {
+<# for (var index = 0; index < Others.Length; ++index) {
+    var item = Others[index];
+    if (item.IsReadOnly) { #>
+                    var other<#= index #> = new global::Unity.Burst.Intrinsics.v256(<#= item.Name #>, <#= item.Name #>, <#= item.Name #>, <#= item.Name #>, <#= item.Name #>, <#= item.Name #>, <#= item.Name #>, <#= item.Name #>);
+<# } else { #>
+                    var other<#= index #> = <#= item.Name #>[0];
+<# } #>
+<# } #>
+<# for (var index = 0; index < Outers.Length; ++index) {
+    var item = Outers[index]; #>
+                    var outerPointer<#= index #> = (byte*)global::Unity.Collections.LowLevel.Unsafe.NativeArrayUnsafeUtility.GetUnsafeBufferPointerWithoutChecks(<#= item.Name #>);
+<# } #>
+
+                    for (
+                        var outerIndex = 0;
+                        outerIndex < <#= Outers[0].Name #>.Length;
+                        ++outerIndex<# for (var index = 0; index < Outers.Length; ++index) { #>,
+                        outerPointer<#= index #> += sizeof(<#= Outers[index].Symbol.ToDisplayString() #>.Eight)<# } #>
+
+                    )
+                    {
+<# for (var index = 0; index < method.Outers.Length; ++index) {
+    var item = method.Outers[index];
+    var fieldIndex = item.GetIndex(Outers[item.Index].Symbol); #>
+                        var outer<#= item.Index #>_<#= item.Name #> = global::Unity.Burst.Intrinsics.X86.Avx.mm256_load_ps(outerPointer<#= item.Index #> + (<#= fieldIndex #> << 5));
+<# } #>
+<# { 
+      var parameter = method.Outers[0]; #>
+                        <#= method.Symbol.Name #>(ref outer<#= parameter.Index #>_<#= parameter.Name #><# for (var index = 1; index < method.Outers.Length; ++index) { parameter = method.Outers[index]; #>, ref outer<#= parameter.Index #>_<#= parameter.Name #><# } for (var index = 0; index < method.Others.Length; ++index) { parameter = method.Others[index]; #>, ref other<#= parameter.Index #><# } for (var index = 0; index < method.Tables.Length; ++index) { parameter = method.Tables[index]; #>, tablePointer<#= parameter.Index #>, <#= Tables[parameter.Index].Name #>.Length<# } #>);
+<# } #>
+<# for (var index = 0; index < method.Outers.Length; ++index) {
+    var item = method.Outers[index];
+    var typeItem = Outers[item.Index];
+    if (typeItem.IsReadOnly) { continue; }
+    var fieldIndex = item.GetIndex(typeItem.Symbol); #>
+                        global::Unity.Burst.Intrinsics.X86.Avx.mm256_store_ps(outerPointer<#= item.Index #> + (<#= fieldIndex #> << 5), outer<#= item.Index #>_<#= item.Name #>);
+<# } #>
+                    }
+<# for (var index = 0; index < Others.Length; ++index) {
+    var item = Others[index];
+    if (item.IsReadOnly) { continue; } #>
+
+                    <#= item.Name #>[0] = other<#= index #>;
+<# } #>
+                    return;
+                }
+
+<# } #>
+<# { var method = Ordinal; #>
+                {
+<# for (var index = 0; index < Others.Length; ++index) {
+    var item = Others[index];
+    if (item.IsReadOnly) { #>
+                    var other<#= index #> = new global::Unity.Mathematics.<#= item.Symbol.ToDisplayString() #>4(<#= item.Name #>, <#= item.Name #>, <#= item.Name #>, <#= item.Name #>);
+<# } else { #>
+                    var other<#= index #> = <#= item.Name #>[0];
+<# } #>
+<# } #>
+
+                    for (var outerIndex = 0; outerIndex < <#= Outers[0].Name #>.Length; ++outerIndex)
+                    {
+<# for (var index = 0; index < Outers.Length; ++index) {
+    var item = Outers[index]; #>
+                        var outer<#= index #> = <#= item.Name #>[outerIndex];
+<# } #>
+<# for (var cIndex0 = 0; cIndex0 < 2; ++cIndex0) {
+      var parameter = method.Outers[0]; #>
+                        <#= method.Symbol.Name #>(ref outer<#= parameter.Index #>.<#= parameter.Name #>.c<#= cIndex0 #><# for (var index = 1; index < method.Outers.Length; ++index) { parameter = method.Outers[index]; #>, ref outer<#= parameter.Index #>.<#= parameter.Name #>.c<#= cIndex0 #><# } for (var index = 0; index < method.Others.Length; ++index) { parameter = method.Others[index]; #>, ref other<#= parameter.Index #><# } for (var index = 0; index < method.Tables.Length; ++index) { parameter = method.Tables[index]; #>, tablePointer<#= parameter.Index #>, <#= Tables[parameter.Index].Name #>.Length<# } #>);
+<# } #>
+<# for (var index = 0; index < Outers.Length; ++index) {
+    var item = Outers[index];
+    if (item.IsReadOnly) { continue; } #>
+                        <#= item.Name #>[outerIndex] = outer<#= index #>;
+<# } #>
+                    }
+<# for (var index = 0; index < Others.Length; ++index) {
+    var item = Others[index];
+    if (item.IsReadOnly) { continue; } #>
+
+                    <#= item.Name #>[0] = other<#= index #>;
+<# } #>
+                }
+<# } #>
+            }
+        }
+    }
+}
 ```
 </div></details>
 
