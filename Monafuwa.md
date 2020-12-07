@@ -1,4 +1,4 @@
-# C# Source GeneratorによるAOSOAを活用したDOTSプログラミング補助の試みとそのUnityにおける敗北
+# C# Source GeneratorによるAOSOAを活用したDOTSプログラミング補助の試みとそのUnityにおける敗北からの完全勝利
 
 1999年12月8日は「ハリー・ポッターと賢者の石」が日本で発売された日です。故にこの記事も初投稿です。
 
@@ -1684,8 +1684,107 @@ namespace <#= TypeSymbol.ContainingNamespace.ToDisplayString() #>
 ```
 </div></details>
 
-<details><summary>.tt</summary><div>
+# これをUnityからどう使うのか
+
+[最近C# Source GeneratorをUnityから使いたい](https://qiita.com/RyotaMurohoshi/items/05ba5a7e01b3e66f68ab)という記事が出ました。<br/>
+この記事は「使えないね」と結論づけました。（ついでにUnity2020ではこの記事が問題とした挙動が改善されているのでC# Source GeneratorがUnityで正式にサポートされる頃には仕様場面が消えるという……）
+
+私も大体半月ほど前は同じ結論に達したのでたすけて！もなふわすい～とる～む！状態に陥り、今回の記事を書くことに決めました。<br/>
+しかし、Unityだけにこだわる必要はなかったのです。<br/>
+巻乃もなかさんはVTuberであり、一人の女の子ですが、かつて勇気を持って自分の嗜好についてカミングアウトしました。<br/>
+その結果、Unityエンジニアから熱烈な支持を受け、新たな地平を切り開きました。
+
+**人間は度胸が大事！**<br/>
+私も巻乃さんのように一歩Unityから踏み出しましょう！
+
+## 解決策
+
+フォルダ構造は以下のようになっています。
 
 ```
+RootFolder/
+├─ Managed/
+│   ├─ Analyzer/
+│   │   └─ Analyzer.csproj
+│   └─ UnityApp/
+│       └─ UnityApp.csproj
+└─ Unity/
+    ├─ Assets/
+    │   └─ MyFolder/
+    │       └─ Scripts/
+    │           └─ DOTS/
+    ├─ Library/
+    ├─ Logs/
+    ├─ Packages/
+    ├─ ProjectSettings/
+    └─ UserSettings/
+```
+
+私の答えは **「[Assembly Definition File](http://tsubakit1.hateblo.jp/entry/2018/01/18/212834)を作成できるようなプロジェクト構造にした上で対象のファイル群(`Unity/Assets/MyFolder/Scripts/DOTS/*.cs`)を`Managed/UnityApp/`以下に含め、`Managed/UnityApp/UnityApp.csproj`がC# Source Generatorを利用する」** です。<br/>
+
+<details><summary>DOTSのAssembly Definition Fileはこのような設定です。</summary><div>
+
+![](./monafuwa_pictures/asmdef.png)
+</div></details>
+
+<details><summary>UnityApp.csprojはこのようになっています。</summary><div>
+
+```xml
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <LangVersion>8.0</LangVersion>
+    <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles> 
+    <CompilerGeneratedFilesOutputPath>$(BaseIntermediateOutputPath)GeneratedFiles</CompilerGeneratedFilesOutputPath>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="../../Unity/Assets/MyFolder/Scripts/DOTS/**/*.cs;" Exclude="../../Unity/Assets/MyFolder/Scripts/DOTS/MyAnalyzerResult.cs" />
+    <ProjectReference Include="..\Analyzer\Analyzer.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+    <Reference Include="Unity.Burst">
+      <HintPath>..\..\Unity\Library\ScriptAssemblies\Unity.Burst.dll</HintPath>
+    </Reference>
+    <Reference Include="Unity.Mathematics">
+      <HintPath>..\..\Unity\Library\ScriptAssemblies\Unity.Mathematics.dll</HintPath>
+    </Reference>
+    <Reference Include="UnityEngine.CoreModule">
+      <HintPath>C:\Program Files\Unity\Hub\Editor\2020.2.0b14\Editor\Data\Managed\UnityEngine\UnityEngine.CoreModule.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+
+  <Target Name="PostBuild" AfterTargets="PostBuildEvent">
+    <Copy SourceFiles="./obj/GeneratedFiles\Analyzer\Analyzer.Generator\MyAnalyzerResult.cs"
+          DestinationFolder="../../Unity/Assets/MyFolder/Scripts/DOTS/" />
+  </Target>
+</Project>
 ```
 </div></details>
+
+`LangVersion`に8を指定したり、`TargetFramework`を`netstandard2.0`にすることで生成したコードをUnityからも安全に使えるようにしています。<br/>
+`Compile`でC#ファイルをコンパイル対象に加えます。<br/>
+`Assembly Definition File`に加えていたリファレンスを良い感じにDLL参照として追加します。<br/>
+正直`Unity/Library/ScriptAssemblies/`フォルダ以下からDLLを持ってくるのは不安定だったりして悪手気味ですが……。<br/>
+ビルド成功時にC# Source Generator成果物の`MyAnalyzerResult.cs`を`Unity/Assets/MyFolder/Scripts/DOTS/`以下にコピペしたら完成！
+
+## たすけて！　もなふわすい～とる～む！
+
+C# Source Generator成果物をファイル出力させるために、以下の項目を設定しています。
+
+```xml
+<EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles> 
+<CompilerGeneratedFilesOutputPath>$(BaseIntermediateOutputPath)GeneratedFiles</CompilerGeneratedFilesOutputPath>
+```
+
+かなり最近追加された昨日ですのでめちゃくちゃ不安定です……。<br/>
+`Managed/UnityApp`のビルドは成功しているのに、お出しされる`MyAnalyzerResult.cs`が壊れているというのはザラです……。<br/>
+手作業で壊れている部分を消せばいいのですが……。それにしたって一一手間が掛かる残念さです。
+
+# その後
+
+C# Source Generatorのパワーを手に入れ、ドッグフーディングしつつ開発を継続しています。<br/>
+シェーダーの仕様や、4K画質だと60FPSを下回るなどなど様々な課題がありますが、もなふわすい～とる～むを信じて頑張っています。
+
+# 結論
+
+**[巻乃もなか氏](https://twitter.com/monaka_0_0_7)を信じればあなたも私と同じように救われます！**
