@@ -4,18 +4,17 @@
 
 この記事は、[もなふわすい～とる～む Advent Calendar 2020](https://adventar.org/calendars/5183)の8日目です。<br/>
 昨日の記事は[サンマックスさん](https://twitter.com/Sunmax0731)の「[もなふわすい～とる～む in the VRChat](https://qiita.com/Sunmax0731/private/cd90b674fe33b530c6bf)」でした！<br/>
-明日の記事はオークマネコさんの「」です。
 
 # はじめに
 
-皆さんこんにちは～！ バーチャルHigh Performance C#erのスーギ・ノウコ自治区です。
+皆さんこんにちは～！ バーチャルHigh Performance C#erの[スーギ・ノウコ自治区](https://twitter.com/pCYSl5EDgo)です。
 
-きっとこの記事を読む皆さんは[巻乃もなか氏](https://twitter.com/monaka_0_0_7)のことが大好きなのですよね？<br/>
+きっとこの記事を読む皆さんは[巻乃もなか](https://twitter.com/monaka_0_0_7)氏のことが大好きなのですよね？<br/>
 そして皆さんがUnityエンジニアであるならば、ビルドが失敗した時とかに「たすけて！もなふわすい～とる～む！！」とTwitterに書き込んだ経験があるはずです。<br/>
 周囲に人がいなかったならば声に出していた人もいるでしょう。
 
 この記事は私がもなふわすい～とる～むに助けを求めた事例について記載しています。<br/>
-巻乃もなか氏についての魅力を語りつくす類の記事ではないことをご了承ください。
+[巻乃もなか](https://twitter.com/monaka_0_0_7)氏についての魅力を語りつくす類の記事ではないことをご了承ください。
 
 大体ここに書いた内容はSHOWROOM社のエンジニアにとっては常識らしいのですごいですね。
 
@@ -26,7 +25,7 @@
 
 ## もなふわすい～とる～む
 
-- [巻乃もなか氏のTwitter](https://twitter.com/monaka_0_0_7)
+- [巻乃もなか](https://twitter.com/monaka_0_0_7)氏のTwitter
 
 ## 計算機科学
 
@@ -64,7 +63,7 @@
 
 筆者は随時バージョンアップしています。
 
-- Unity 2020.2.0b13
+- Unity 2020.2.0b14
 - Burst 1.4.1
 - Visual Studio 2019 16.8.1
 - .NET 5.0.100
@@ -366,7 +365,7 @@ public struct AnotherPosition2DEight
 ```
 
 この`AnotherPosition2DEight`は効率的なSIMD演算を阻害します。特にXとY同士で計算しようとすると非常に非効率になります。<br/>
-X座標はX座標と、Y座標はY座標とお付き合いするべきだと思いますわね。 ~~バ美肉エンジニアのねぎぽよしさんはizmさんとお付き合いするべき~~
+X座標はX座標と、Y座標はY座標とお付き合いするべきだと思いますわね。 ~~[バ美肉エンジニアのねぎぽよしさん](https://twitter.com/CST_negi)は[izmさん](https://twitter.com/izm)とお付き合いするべき~~
 
 x86/64系CPUでSIMDを使う際に注意してほしいことなのですけれども、**比較演算の結果のtrueは比較対象の型の幅の全bitが1になっています**。<br/>
 故に`enum AliveState`はDeadが-1でAliveが0とすることで、それぞれ`true`と`false`に対応させているのですね。
@@ -527,13 +526,15 @@ Position3Dとかnot power of 2な構造なら今回のようにAOSOAにすると
 
 Roslynバージョン3.6からはC# Source Generatorというものを使えばコンパイル時にソースコードを自動生成できるのです！<br/>
 ついでにRoslyn 3.8はC#9も使えるのでぜひ使いましょう！<br/>
-目下の所最大の問題はUnity2020.2はRoslyn 3.8を同梱していないということですが……。どうして3.5なの……？<br/>
-たすけて！もなふわすい～とる～む！！
+目下の所最大の問題はUnity2020.2はRoslyn 3.8を同梱していないということですが……。<br/>
+どうして3.5なの……？<br/>
+Forumで3.8にバージョンを上げてほしいと要望しても拒絶されましたし……<br/>
+**たすけて！もなふわすい～とる～む！！**
 
 いやまあコンパイル時ソースコード自動生成は[従来からRoslynを利用してdotnet global toolで実現](https://github.com/neuecc/MessagePack-CSharp)とか出来ていましたが……。<br/>
 C# Source Generator触っているうちにデバッグの利便性を考えるとコア部分を切り出した上で、まずはConsoleアプリとして構築し、それが上手く動いたらC# Source Generatorにした方が楽だという知見も得てしまって……。<br/>
 更にエディタが重くなったり不安定になるとかいう副作用もあるので……。
-たすけて！もなふわすい～とる～む！
+**たすけて！もなふわすい～とる～む！**
 
 実装すればするほどリアルタイムでソースコードが生成されるからエディタ体験がエラーで中断されない程度しか利用者に利点がないC# Source Generatorくんちゃん……<br/>
 
@@ -844,7 +845,8 @@ static partial class  CollisionHolder
 
 高効率なボイラープレートコードを自動で生成してくれるのは大変ありがたいものだと私は思います。<br/>
 以下のコードは最高効率からは少しだけ劣りますが、定型的なコードとしては最大限高速化されているものだと言えると思います。<br/>
-これより速く効率の良いものが欲しいのであるならばもなな部長に「たすけて！」と求めるしか無いでしょう。巻乃さんなら作れます。
+これより速く効率の良いものが欲しいのであるならばもなな部長に「たすけて！」と求めるしか無いでしょう。<br/>
+巻乃さんなら作れます。
 
 ## 実際どの程度速いのか
 
@@ -854,7 +856,7 @@ static partial class  CollisionHolder
 
 コード生成するのにもかなりボイラープレートコードが必要でした。<br/>
 特にRoslynを用いて属性の解釈を行う場合、コンストラクタ引数を相手にするのが一番手間が少ないのですが、それでも配列を相手にすると型の検証やらナニやらで大変面倒です……<br/>
-何度「たすけて！もなふわすi～z～m！」を叫んだことでしょうか……
+何度「たすけて！もなふわす[i～z～m](https://twitter.com/izm)！」を叫んだことでしょうか……
 
 <details><summary>コード生成時に参照する属性.cs</summary><div>
 
@@ -1185,7 +1187,7 @@ if (SymbolEqualityComparer.Default.Equals(attributeClass, eight))
 
 属性型シンボルの等値性比較は`==`演算子では不正確です。<br/>
 これを知らず、もなふわすい～とる～むにたすけを求めたこともありました。<br/>
-`SymbolEqualityComparer`クラスこそが巻乃もなかさんの齎した福音であり、救済です。<br/>
+`SymbolEqualityComparer`クラスこそが[巻乃もなか](https://twitter.com/monaka_0_0_7)さんの齎した福音であり、救済です。<br/>
 `Default`と`IncludeNullability`の２つのメンバーが生えていますが、基本的に前者を利用して等値性比較をしていきます。(後者はC#8から導入されたnullable reference type用アノテーションまで考慮した等値性比較を行います。)
 
 ```csharp
@@ -1541,7 +1543,7 @@ C# Source Generatorのデバッグは非常にめんどくさいため、多少�
 上記処理では属性のコンストラクタ引数である`TypedConstant`オブジェクトを良い感じに解釈していっています。<br/>
 [C#の属性に持たせられる情報は非常に限定的です。](https://docs.microsoft.com/ja-jp/dotnet/csharp/language-reference/language-specification/attributes#attribute-parameter-types)<br/>
 そのため、自作の構造体を使用したい場合でも諦めざるを得ません。<br/>
-無敵のダーク巻乃さんがMSに命令してくれたらなんとかなると思うのですが……
+無敵のダーク巻乃さんがMS(もなふわすい～とる～むではない。Microsoft社)に命令してくれたらなんとかなると思うのですが……
 
 さて、`TryCreate`で適切なオブジェクトを生成した後は`TransformText`でソースコードを生成します。<br/>
 以下がそのテンプレートコードです。
@@ -1687,11 +1689,11 @@ namespace <#= TypeSymbol.ContainingNamespace.ToDisplayString() #>
 # これをUnityからどう使うのか
 
 [最近C# Source GeneratorをUnityから使いたい](https://qiita.com/RyotaMurohoshi/items/05ba5a7e01b3e66f68ab)という記事が出ました。<br/>
-この記事は「使えないね」と結論づけました。（ついでにUnity2020ではこの記事が問題とした挙動が改善されているのでC# Source GeneratorがUnityで正式にサポートされる頃には仕様場面が消えるという……）
+この記事は「使えないね」と結論づけました。（Unity2020ではこの記事が問題とした挙動が改善されているのでC# Source GeneratorがUnityで正式にサポートされる頃にはこの記事の問題としていた条件が消えるという……）
 
 私も大体半月ほど前は同じ結論に達したのでたすけて！もなふわすい～とる～む！状態に陥り、今回の記事を書くことに決めました。<br/>
 しかし、Unityだけにこだわる必要はなかったのです。<br/>
-巻乃もなかさんはVTuberであり、一人の女の子ですが、かつて勇気を持って自分の嗜好についてカミングアウトしました。<br/>
+[巻乃もなか](https://twitter.com/monaka_0_0_7)さんはVTuberであり、一人の女の子ですが、かつて勇気を持って自分の嗜好についてカミングアウトしました。<br/>
 その結果、Unityエンジニアから熱烈な支持を受け、新たな地平を切り開きました。
 
 **人間は度胸が大事！**<br/>
@@ -1776,7 +1778,7 @@ C# Source Generator成果物をファイル出力させるために、以下の�
 <CompilerGeneratedFilesOutputPath>$(BaseIntermediateOutputPath)GeneratedFiles</CompilerGeneratedFilesOutputPath>
 ```
 
-かなり最近追加された昨日ですのでめちゃくちゃ不安定です……。<br/>
+かなり最近追加された機能ですのでめちゃくちゃ不安定です……。<br/>
 `Managed/UnityApp`のビルドは成功しているのに、お出しされる`MyAnalyzerResult.cs`が壊れているというのはザラです……。<br/>
 手作業で壊れている部分を消せばいいのですが……。それにしたって一一手間が掛かる残念さです。
 
@@ -1787,4 +1789,4 @@ C# Source Generatorのパワーを手に入れ、ドッグフーディングし�
 
 # 結論
 
-**[巻乃もなか氏](https://twitter.com/monaka_0_0_7)を信じればあなたも私と同じように救われます！**
+**[巻乃もなか](https://twitter.com/monaka_0_0_7)氏を信じればあなたも私と同じように救われます！**
