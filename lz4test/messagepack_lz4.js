@@ -57,7 +57,7 @@ export class MessagePackLz4 {
         if (actual != srcLen) {
             return new Error("decompression failed! src code is not fulley used! source length: " + srcLen.toString() + ", used : " + actual.toString());
         }
-        return new Uint8Array(buffer, this.offset + srcLen, actual);
+        return new Uint8Array(buffer, this.offset + srcLen, destinationLength);
     }
 }
 export const promise = loadWasm();

@@ -1,5 +1,4 @@
 import { promise as lz4promise } from './messagepack_lz4.js';
-
 const testFunction = async (blob) => {
     const lz4 = await lz4promise;
     const originalBytes = new Uint8Array(await blob.arrayBuffer());
@@ -7,18 +6,29 @@ const testFunction = async (blob) => {
     if (compressedBytes instanceof Error)
         return compressedBytes;
     console.log("compression currenlty passes");
-    const copyOriginal = compressedBytes.slice();
-    const restore = lz4.decompress(copyOriginal, originalBytes.byteLength);
-    if (restore instanceof Error) { return restore; }
-    const copyRestore = restore.slice();
-    for (let index = 0; index < restore.length; index++) {
-        const element = restore[index];
+    const copyCompressed = new Uint8Array(compressedBytes.byteLength);
+    copyCompressed.set(compressedBytes);
+    const restore = lz4.decompress(copyCompressed, originalBytes.byteLength);
+    if (restore instanceof Error) {
+        return restore;
+    }
+    const copyDecompressed = new Uint8Array(restore.byteLength);
+    copyDecompressed.set(restore);
+    if (copyDecompressed.length !== originalBytes.length) {
+        return new Error("different length. Original : " + originalBytes.length.toString() + ", decompressed : " + copyDecompressed.length.toString());
+    }
+    for (let index = 0; index < copyDecompressed.length; index++) {
+        const element = copyDecompressed[index];
         const rightElement = originalBytes[index];
-        if (element != rightElement)
+        if (element != rightElement) {
             return new Error("different element at " + index.toString());
+        }
     }
     console.log("decompression success!!!!");
-    return [copyOriginal, copyRestore];
+    return {
+        compressed: copyCompressed,
+        decompressed: copyDecompressed,
+    };
 };
 window.addEventListener("DOMContentLoaded", async () => {
     console.log("loaded");
@@ -36,7 +46,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     }
     const decompressedFileList = document.getElementById("decompressed-file-list");
     if (!decompressedFileList) {
-        throw new Error("compressed file list not found!");
+        throw new Error("decompressed file list not found!");
     }
     const itemTemplate = document.getElementById("template-compress");
     if (!itemTemplate) {
@@ -67,11 +77,14 @@ window.addEventListener("DOMContentLoaded", async () => {
                 const buffer = await file.arrayBuffer();
                 console.log("buffer size" + buffer.byteLength.toString());
                 const binary = await testFunction(file);
-                if (binary instanceof Error) { throw binary; }
+                if (binary instanceof Error) {
+                    throw binary;
+                }
+                console.log("comp + " + binary.compressed.length.toString() + ", decomp + " + binary.decompressed.length.toString() + "\nname : " + file.name);
                 return {
                     name: file.name,
-                    compressed: new Blob([binary[0]]),
-                    restored: new Blob([binary[1]]),
+                    compressed: new Blob([binary.compressed]),
+                    decompressed: new Blob([binary.decompressed]),
                 };
             })();
             getBufferJob.push(job);
@@ -81,10 +94,10 @@ window.addEventListener("DOMContentLoaded", async () => {
         for (const buffer of buffers) {
             if (buffer.status === "fulfilled") {
                 const value = buffer.value;
-                if (!value) { continue; }
+                if (!value)
+                    continue;
                 {
                     const copy = itemTemplate.content.cloneNode(true);
-                    console.log("copy clone!");
                     const liElement = copy.querySelector("li");
                     if (!liElement) {
                         throw new Error("not li");
@@ -97,10 +110,8 @@ window.addEventListener("DOMContentLoaded", async () => {
                     anchorElement.href = URL.createObjectURL(value.compressed);
                     compressedFileList.appendChild(copy);
                 }
-
                 {
                     const copy = itemTemplate.content.cloneNode(true);
-                    console.log("copy clone!");
                     const liElement = copy.querySelector("li");
                     if (!liElement) {
                         throw new Error("not li");
@@ -110,8 +121,8 @@ window.addEventListener("DOMContentLoaded", async () => {
                         throw new Error("not anchor");
                     }
                     anchorElement.textContent = value.name;
-                    anchorElement.href = URL.createObjectURL(value.restored);
-                    compressedFileList.appendChild(copy);
+                    anchorElement.href = URL.createObjectURL(value.decompressed);
+                    decompressedFileList.appendChild(copy);
                 }
             }
             else if (buffer.status === "rejected") {
