@@ -2,18 +2,27 @@ import { promise as lz4promise } from './messagepack_lz4.js';
 const testFunction = async (blob) => {
     const lz4 = await lz4promise;
     const originalBytes = new Uint8Array(await blob.arrayBuffer());
-    const compressedBytes = lz4.compress(originalBytes);
-    if (compressedBytes instanceof Error)
+    const tempCompressSourceBuffer = lz4.prepareCompress(originalBytes.byteLength);
+    if (tempCompressSourceBuffer instanceof Error) {
+        return tempCompressSourceBuffer;
+    }
+    tempCompressSourceBuffer.set(originalBytes);
+    const compressedBytes = lz4.executeCompress(originalBytes.byteLength);
+    if (compressedBytes instanceof Error) {
         return compressedBytes;
+    }
     console.log("compression currenlty passes");
-    const copyCompressed = new Uint8Array(compressedBytes.byteLength);
-    copyCompressed.set(compressedBytes);
-    const restore = lz4.decompress(copyCompressed, originalBytes.byteLength);
+    const copyCompressed = compressedBytes.slice();
+    const tempDecompressSourceBuffer = lz4.prepareDecompress(copyCompressed.byteLength, originalBytes.byteLength);
+    if (tempDecompressSourceBuffer instanceof Error) {
+        return tempDecompressSourceBuffer;
+    }
+    tempDecompressSourceBuffer.set(copyCompressed);
+    const restore = lz4.executeDecompress(copyCompressed.byteLength, originalBytes.byteLength);
     if (restore instanceof Error) {
         return restore;
     }
-    const copyDecompressed = new Uint8Array(restore.byteLength);
-    copyDecompressed.set(restore);
+    const copyDecompressed = restore.slice();
     if (copyDecompressed.length !== originalBytes.length) {
         return new Error("different length. Original : " + originalBytes.length.toString() + ", decompressed : " + copyDecompressed.length.toString());
     }
@@ -30,32 +39,20 @@ const testFunction = async (blob) => {
         decompressed: copyDecompressed,
     };
 };
+function getElementById(id) {
+    const element = document.getElementById(id);
+    if (!element) {
+        throw new Error(id + " not found!");
+    }
+    return element;
+}
 window.addEventListener("DOMContentLoaded", async () => {
     console.log("loaded");
-    const byteLengthInput = document.getElementById("file-bytelength");
-    if (!byteLengthInput) {
-        throw new Error("file-bytelength not found!");
-    }
-    const fileInput = document.getElementById("file-input");
-    if (!fileInput) {
-        throw new Error("file-input not found!");
-    }
-    const compressedFileList = document.getElementById("compressed-file-list");
-    if (!compressedFileList) {
-        throw new Error("compressed file list not found!");
-    }
-    const decompressedFileList = document.getElementById("decompressed-file-list");
-    if (!decompressedFileList) {
-        throw new Error("decompressed file list not found!");
-    }
-    const itemTemplate = document.getElementById("template-compress");
-    if (!itemTemplate) {
-        throw new Error("template not found!");
-    }
-    const compressButton = document.getElementById("file-compress");
-    if (!compressButton) {
-        throw new Error("compress button not found!");
-    }
+    const fileInput = getElementById("file-input");
+    const compressedFileList = getElementById("compressed-file-list");
+    const decompressedFileList = getElementById("decompressed-file-list");
+    const itemTemplate = getElementById("template-compress");
+    const compressButton = getElementById("file-compress");
     const compressClick = async () => {
         console.log("clocked");
         const files = fileInput.files;

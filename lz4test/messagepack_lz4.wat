@@ -30,7 +30,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ;)
 
 (module
-    (memory (export "mainMemory") 1 0xffff)
+    (memory (export "mainMemory") 1)
     (global $src (export "sourceOffset") i32 (i32.const 0x10a0))
     ;; private static readonly int[] DEBRUIJN_TABLE_32 = new int[32] 32 * 4 = 128
     ;; {
@@ -96,9 +96,9 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
         if $before_return (result)
             ;; First Byte
             ;; *(uint*)(hash_table + CalcHash(src_p)) = (uint)(src_p - src);
-            local.get $src_p call $CalcHash i32.const 0xa0 i32.add local.get $src_p global.get $src i32.sub i32.store
+            local.get $src_p i32.load i32.const 2654435761 i32.mul i32.const 22 i32.shr_u i32.const 2 i32.shl i32.const 0xa0 i32.add local.get $src_p global.get $src i32.sub i32.store
             ;; h_fwd = CalcHash(++src_p);
-            local.get $src_p i32.const 1 i32.add local.tee $src_p call $CalcHash local.set $h_fwd
+            local.get $src_p i32.const 1 i32.add local.tee $src_p i32.load i32.const 2654435761 i32.mul i32.const 22 i32.shr_u i32.const 2 i32.shl local.set $h_fwd
 
             loop $main (result)
                 ;; findMatchAttempts = 67;
@@ -117,7 +117,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
                     local.get $src_p_fwd i32.const 12 i32.add local.get $src_end i32.gt_u br_if $before_return
 
                     ;; h_fwd = CalcHash(src_p_fwd);
-                    local.get $src_p_fwd call $CalcHash local.set $h_fwd
+                    local.get $src_p_fwd i32.load i32.const 2654435761 i32.mul i32.const 22 i32.shr_u i32.const 2 i32.shl local.set $h_fwd
                     ;; xxx_ref = src + *(uint*)(hash_table + h);
                     i32.const 0xa0 local.get $h i32.add i32.load global.get $src i32.add local.set $xxx_ref
                     ;; *(uint*)(hash_table + h) = (uint)(src_p - src);
@@ -343,13 +343,13 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
                     ;; Fill table
                     ;; *(uint*)(hash_table + CalcHash(src_p - 2)) = (uint)(src_p - 2 - src);
-                    local.get $src_p i32.const 2 i32.sub call $CalcHash i32.const 0xa0 i32.add
+                    local.get $src_p i32.const 2 i32.sub i32.load i32.const 2654435761 i32.mul i32.const 22 i32.shr_u i32.const 2 i32.shl i32.const 0xa0 i32.add
                     local.get $src_p i32.const 2 i32.sub global.get $src i32.sub
                     i32.store
 
                     ;; Test next position
                     ;; h = CalcHash(src_p);
-                    local.get $src_p call $CalcHash local.set $h
+                    local.get $src_p i32.load i32.const 2654435761 i32.mul i32.const 22 i32.shr_u i32.const 2 i32.shl local.set $h
                     ;; xxx_ref = src + *(uint*)(hash_table + h);
                     global.get $src i32.const 0xa0 local.get $h i32.add i32.load i32.add local.set $xxx_ref
                     ;; *(uint*)(hash_table + h) = (uint)(src_p - src);
@@ -376,7 +376,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
                 ;; src_anchor = src_p;
                 local.get $src_p local.set $src_anchor
                 ;; h_fwd = CalcHash(++src_p);
-                local.get $src_p i32.const 1 i32.add local.tee $src_p call $CalcHash local.set $h_fwd
+                local.get $src_p i32.const 1 i32.add local.tee $src_p i32.load i32.const 2654435761 i32.mul i32.const 22 i32.shr_u i32.const 2 i32.shl local.set $h_fwd
                 br $main
             end $main
         end $before_return
@@ -416,7 +416,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
         if $before_return (result)
             ;; First Byte
             ;; h_fwd = CalcHash64K(++src_p);
-            local.get $src_p i32.const 1 i32.add local.tee $src_p call $CalcHash64K local.set $h_fwd
+            local.get $src_p i32.const 1 i32.add local.tee $src_p i32.load i32.const 2654435761 i32.mul i32.const 21 i32.shr_u i32.const 1 i32.shl local.set $h_fwd
 
             loop $main (result)
                 ;; findMatchAttempts = 67;
@@ -435,7 +435,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
                     local.get $src_p_fwd i32.const 12 i32.add local.get $src_end i32.gt_u br_if $before_return
 
                     ;; h_fwd = CalcHash64K(src_p_fwd);
-                    local.get $src_p_fwd call $CalcHash64K local.set $h_fwd
+                    local.get $src_p_fwd i32.load i32.const 2654435761 i32.mul i32.const 21 i32.shr_u i32.const 1 i32.shl local.set $h_fwd
                     ;; xxx_ref = src + *(ushort*)(hash_table + h);
                     i32.const 0xa0 local.get $h i32.add i32.load16_u global.get $src i32.add local.set $xxx_ref
                     ;; *(ushort*)(hash_table + h) = (ushort)(src_p - src);
@@ -659,13 +659,13 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
                     ;; Fill table
                     ;; *(ushort*)(hash_table + CalcHash64K(src_p - 2)) = (ushort)(src_p - 2 - src);
-                    local.get $src_p i32.const 2 i32.sub call $CalcHash64K i32.const 0xa0 i32.add
+                    local.get $src_p i32.const 2 i32.sub i32.load i32.const 2654435761 i32.mul i32.const 21 i32.shr_u i32.const 1 i32.shl i32.const 0xa0 i32.add
                     local.get $src_p i32.const 2 i32.sub global.get $src i32.sub
                     i32.store16
 
                     ;; Test next position
                     ;; h = CalcHash64K(src_p);
-                    local.get $src_p call $CalcHash64K local.set $h
+                    local.get $src_p i32.load i32.const 2654435761 i32.mul i32.const 21 i32.shr_u i32.const 1 i32.shl local.set $h
                     ;; xxx_ref = src + *(ushort*)(hash_table + h);
                     global.get $src i32.const 0xa0 local.get $h i32.add i32.load16_u i32.add local.set $xxx_ref
                     ;; *(ushort*)(hash_table + h) = (ushort)(src_p - src);
@@ -688,7 +688,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
                 ;; src_anchor = src_p;
                 local.get $src_p local.set $src_anchor
                 ;; h_fwd = CalcHash64K(++src_p);
-                local.get $src_p i32.const 1 i32.add local.tee $src_p call $CalcHash64K local.set $h_fwd
+                local.get $src_p i32.const 1 i32.add local.tee $src_p i32.load i32.const 2654435761 i32.mul i32.const 21 i32.shr_u i32.const 1 i32.shl local.set $h_fwd
                 br $main
             end $main
         end $before_return
@@ -816,11 +816,11 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
                     ;; *dst_p = *xxx_ref;
                     local.get $dst_p local.get $xxx_ref i32.load8_u i32.store8
                     ;; dst_p[1] = xxx_ref[1];
-                    local.get $dst_p i32.const 1 i32.add local.get $xxx_ref i32.const 1 i32.add i32.load8_u i32.store8
+                    local.get $dst_p local.get $xxx_ref i32.load8_u offset=1 i32.store8 offset=1
                     ;; dst_p[2] = xxx_ref[2];
-                    local.get $dst_p i32.const 2 i32.add local.get $xxx_ref i32.const 2 i32.add i32.load8_u i32.store8
+                    local.get $dst_p local.get $xxx_ref i32.load8_u offset=2 i32.store8 offset=2
                     ;; dst_p[3] = xxx_ref[3];
-                    local.get $dst_p i32.const 3 i32.add local.get $xxx_ref i32.const 3 i32.add i32.load8_u i32.store8
+                    local.get $dst_p local.get $xxx_ref i32.load8_u offset=3 i32.store8 offset=3
                     ;; xxx_ref += 4;
                     local.get $xxx_ref i32.const 4 i32.add local.set $xxx_ref
                     ;; dst_p += 4;
@@ -978,30 +978,6 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
             local.get $dst local.get $p i32.lt_u
             br_if 0
         end
-    )
-
-    (func $CalcHash (param $pointer i32) (result i32)
-        ;; return ((*(uint*)pointer * 2654435761u) >> 22) << 2;
-        local.get $pointer
-        i32.load
-        i32.const 2654435761
-        i32.mul
-        i32.const 22
-        i32.shr_u
-        i32.const 2
-        i32.shl
-    )
-
-    (func $CalcHash64K (param $pointer i32) (result i32)
-        ;; return ((*(uint*)pointer * 2654435761u) >> 21) << 1;
-        local.get $pointer
-        i32.load
-        i32.const 2654435761
-        i32.mul
-        i32.const 21
-        i32.shr_u
-        i32.const 1
-        i32.shl
     )
 
     (func $CalcDebruijn (param $diff i32) (result i32)

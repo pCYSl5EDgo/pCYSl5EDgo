@@ -9,7 +9,6 @@
 <body>
 <input type="file" id="file-input" multiple>
 <input type="button" id="file-compress" value="file compress">
-<input type="number" id="file-bytelength">
 <div>
     <h1>compressed files</h1>
     <ul id="compressed-file-list">
@@ -20,7 +19,12 @@
     <ul id="decompressed-file-list">
     </ul>
 </div>
+<div>
+    <a href="./messagepack_lz4.wat">wat source code</a>
+    <a href="./CSharp.cs">C# source code</a>
+    <a href="./Article.md">解説記事</a>
+</div>
 <template id="template-compress"><li><a></a></li></template>
-<script type="module" src="index.js"></script>
+<script type="module" src="./index.js"></script>
 </body>
 </html>

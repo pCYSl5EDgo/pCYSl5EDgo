@@ -1,17 +1,3 @@
-const loadWasm = async () => {
-    const fetchJob = fetch("./messagepack_lz4.wasm");
-    if (WebAssembly.instantiateStreaming) {
-        const instance = await WebAssembly.instantiateStreaming(fetchJob);
-        return new MessagePackLz4(instance.instance);
-    }
-    else {
-        const response = await fetchJob;
-        const bufferResource = await response.arrayBuffer();
-        const compiledModule = await WebAssembly.compile(bufferResource);
-        const instance = await WebAssembly.instantiate(compiledModule);
-        return new MessagePackLz4(instance);
-    }
-};
 export class MessagePackLz4 {
     constructor(instance) {
         this.offset = instance.exports.sourceOffset;
@@ -20,10 +6,9 @@ export class MessagePackLz4 {
         this.innerCompress = instance.exports.compress;
         this.innerDecompress = instance.exports.decompress;
     }
-    compress(view) {
-        const srcLen = view.length;
-        const destinationLength = this.innerCalcCompressMaximumOutputLength(srcLen);
-        const neededPage = (srcLen + destinationLength + this.offset + 0xffff) >> 16;
+    prepareCompress(sourceLength) {
+        const destinationLength = this.innerCalcCompressMaximumOutputLength(sourceLength);
+        const neededPage = (sourceLength + destinationLength + this.offset + 0xffff) >> 16;
         const currentPage = (this.memory.buffer.byteLength >> 16);
         const deltaPage = neededPage - currentPage;
         if (deltaPage > 0) {
@@ -31,15 +16,15 @@ export class MessagePackLz4 {
                 return new Error("malloc failed! current: " + currentPage.toString() + ", needed: " + neededPage.toString());
             }
         }
-        const buffer = this.memory.buffer;
-        const input = new Uint8Array(buffer, this.offset, srcLen);
-        input.set(view);
-        const actual = this.innerCompress(srcLen, destinationLength);
-        return new Uint8Array(buffer, this.offset + srcLen, actual);
+        return new Uint8Array(this.memory.buffer, this.offset, sourceLength);
     }
-    decompress(view, destinationLength) {
-        const srcLen = view.length;
-        const neededPage = (srcLen + destinationLength + this.offset + 0xffff) >> 16;
+    executeCompress(sourceLength) {
+        const destinationLength = this.innerCalcCompressMaximumOutputLength(sourceLength);
+        const actual = this.innerCompress(sourceLength, destinationLength);
+        return new Uint8Array(this.memory.buffer, this.offset + sourceLength, actual);
+    }
+    prepareDecompress(sourceLength, destinationLength) {
+        const neededPage = (sourceLength + destinationLength + this.offset + 0xffff) >> 16;
         const currentPage = (this.memory.buffer.byteLength >> 16);
         const deltaPage = neededPage - currentPage;
         if (deltaPage > 0) {
@@ -47,17 +32,30 @@ export class MessagePackLz4 {
                 return new Error("malloc failed! current: " + currentPage.toString() + ", needed: " + neededPage.toString());
             }
         }
-        const buffer = this.memory.buffer;
-        const input = new Uint8Array(buffer, this.offset, srcLen);
-        input.set(view);
-        const actual = this.innerDecompress(srcLen, destinationLength);
+        return new Uint8Array(this.memory.buffer, this.offset, sourceLength);
+    }
+    executeDecompress(sourceLength, destinationLength) {
+        const actual = this.innerDecompress(sourceLength, destinationLength);
         if (actual < 0) {
             return new Error("decompression failed! code: " + actual.toString());
         }
-        if (actual != srcLen) {
-            return new Error("decompression failed! src code is not fulley used! source length: " + srcLen.toString() + ", used : " + actual.toString());
+        if (actual != sourceLength) {
+            return new Error("decompression failed! src code is not fulley used! source length: " + sourceLength.toString() + ", used : " + actual.toString());
         }
-        return new Uint8Array(buffer, this.offset + srcLen, destinationLength);
+        return new Uint8Array(this.memory.buffer, this.offset + sourceLength, destinationLength);
     }
 }
-export const promise = loadWasm();
+let compileJob;
+let instanceJob;
+const fetchJob = fetch("./messagepack_lz4.wasm");
+if (WebAssembly.instantiateStreaming) {
+    const instantiateJob = WebAssembly.instantiateStreaming(fetchJob);
+    compileJob = instantiateJob.then(pair => pair.module);
+    instanceJob = instantiateJob.then(pair => pair.instance).then(instance => new MessagePackLz4(instance));
+}
+else {
+    compileJob = fetchJob.then(response => response.arrayBuffer()).then(buffer => WebAssembly.compile(buffer));
+    instanceJob = compileJob.then(module => WebAssembly.instantiate(module)).then(instance => new MessagePackLz4(instance));
+}
+export const promise = instanceJob;
+export const modulePromise = compileJob;
