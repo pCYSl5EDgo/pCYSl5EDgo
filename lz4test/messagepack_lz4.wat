@@ -880,7 +880,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
                                 ;; xxx_ref++;
                                 local.get $xxx_ref i32.const 1 i32.add local.set $xxx_ref
                                 ;; if (++dst_p < dst_cpy) continue;
-                                local.get $dst_p i32.const 8 i32.add local.tee $dst_p i32.const 8 i32.add local.get $dst_cpy i32.lt_s br_if 0
+                                local.get $dst_p i32.const 1 i32.add local.tee $dst_p local.get $dst_cpy i32.lt_s br_if 0
                                 ;; break;
                             end
                         end
