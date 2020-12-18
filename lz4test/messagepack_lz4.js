@@ -51,7 +51,7 @@ const fetchJob = fetch("./messagepack_lz4.wasm");
 if (WebAssembly.instantiateStreaming) {
     const instantiateJob = WebAssembly.instantiateStreaming(fetchJob);
     compileJob = instantiateJob.then(pair => pair.module);
-    instanceJob = instantiateJob.then(pair => pair.instance).then(instance => new MessagePackLz4(instance));
+    instanceJob = instantiateJob.then(pair => new MessagePackLz4(pair.instance));
 }
 else {
     compileJob = fetchJob.then(response => response.arrayBuffer()).then(buffer => WebAssembly.compile(buffer));
