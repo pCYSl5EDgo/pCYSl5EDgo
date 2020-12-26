@@ -362,15 +362,18 @@ HogeFunction(i * i, ++j);
 手書きのコツはC#コードをコメントとして記述した次の行にその行に対応したWebAssemblyを書くことです。<br>
 VS CodeのWebAssembly拡張はインデントの整形の面倒を見てくれないため、複数行にまたがって記述するとコピペビリティがガクガクさがります。
 
-# おしごと
+# 推しごと
 
-以下の画像は全て[きみかさん](https://twitter.com/kimika127)の作品です。
+[きみかさん](https://twitter.com/kimika127)への誕生日祝いで書いた記事です（迫真）
 
 - [Twitter](https://twitter.com/kimika127)
 - [Home page](https://kimisaki.jp/)
 - [Pixiv](https://www.pixiv.net/users/2332887)
 - [GitHub](https://github.com/yKimisaki)
 - [Qiita](https://qiita.com/yKimisaki)
+
+以下の画像は全て[きみかさん](https://twitter.com/kimika127)の作品です。<br>
+良いと思ったら[きみかさん](https://twitter.com/kimika127)フォローして❤
 
 ![きみかさんかわいいよﾊｱﾊｱ](https://pbs.twimg.com/media/EqJguxKVQAAzUmB?format=jpg&name=small)
 ![きみかさんもなな推しているの最高だよﾊｱﾊｱ](https://pbs.twimg.com/media/EqBR7TKUYAItrjA?format=jpg&name=4096x4096)
