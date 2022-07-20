@@ -6,8 +6,7 @@
 
 # Personality
 
-- I am an university student.
-- I live in Tokyo, Japan.
+- I live in Japan.
 - I love the programming static type languages such as C#, Rust and C/C++.
 - I am interested in the optimization.
 
